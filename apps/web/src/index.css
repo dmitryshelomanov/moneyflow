@@ -1,0 +1,55 @@
+@import "tailwindcss";
+@import "@fontsource-variable/geist";
+
+@theme {
+  --font-sans: "Geist Variable", "Segoe UI", sans-serif;
+  --font-display: "Geist Variable", "Segoe UI", sans-serif;
+}
+
+:root {
+  color: #111111;
+  background: linear-gradient(135deg, #f8f8ef 0%, #eef6ee 45%, #f6f3e9 100%);
+  font-family: var(--font-sans);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 20% 15%, #ffe8b8 0 7%, transparent 7.5%),
+    radial-gradient(circle at 88% 18%, #c8f6ff 0 6.5%, transparent 7%),
+    radial-gradient(circle at 76% 78%, #ffd1de 0 8%, transparent 8.5%),
+    linear-gradient(135deg, #f8f8ef 0%, #eef6ee 45%, #f6f3e9 100%);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.025em;
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(18px);
+  }
+}
+
+.animate-float {
+  animation: float 9s ease-in-out infinite;
+}
+
+.animate-float-delayed {
+  animation: float 11s ease-in-out infinite;
+  animation-delay: 1.4s;
+}
