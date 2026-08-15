@@ -1,35 +1,29 @@
 # MoneyFlow
 
-Личный учёт денег: Telegram-бот (текст / фото чека / скрин списка трат) → RouterAI → SQLite → веб-дашборд.
+Personal money tracker: Telegram bot (text / receipt photo / bank history screenshot) → RouterAI → SQLite → web dashboard.
 
-## Скриншоты
+## Screenshots
 
-Данные на скринах демо-сгенерированы (без реальных сумм, мерчантов и карт).
+Demo DB only (fictional amounts and merchants, no personal data).
 
-### Обзор
+<p align="center">
+  <img src="docs/screenshots/dashboard.png" width="32%" alt="Dashboard" />
+  <img src="docs/screenshots/transactions.png" width="32%" alt="Transactions" />
+  <img src="docs/screenshots/categories.png" width="32%" alt="Categories" />
+</p>
 
-![Дашборд MoneyFlow](docs/screenshots/dashboard.png)
-
-### Операции
-
-![Список операций](docs/screenshots/transactions.png)
-
-### Категории
-
-![Управление категориями](docs/screenshots/categories.png)
-
-## Стек
+## Stack
 
 - `apps/api` — Hono + Drizzle + SQLite + grammY
 - `apps/web` — React + Vite + Tailwind + Recharts (glass UI)
-- `packages/shared` — Zod-схемы
+- `packages/shared` — Zod schemas
 
-## Быстрый старт
+## Quick start
 
 ```bash
 cp .env.example .env
-# заполни ACCESS_KEY, SESSION_SECRET; для бота — TELEGRAM_BOT_TOKEN, ALLOWED_TELEGRAM_IDS
-# для AI — ROUTERAI_API_KEY
+# fill ACCESS_KEY, SESSION_SECRET; for the bot — TELEGRAM_BOT_TOKEN, ALLOWED_TELEGRAM_IDS
+# for AI — ROUTERAI_API_KEY
 
 npm install
 npm run build -w @moneyflow/shared
@@ -37,233 +31,239 @@ npm run dev:api
 npm run dev:web
 ```
 
-Открой: `http://localhost:5173/k/<ACCESS_KEY>/`
+Open: `http://localhost:5173/k/<ACCESS_KEY>/`
 
-В dev без Telegram widget есть кнопка «Войти (dev)».
+In development (no Telegram widget) use the **Sign in (dev)** button.
 
-`WEB_ORIGIN` попадает в приветствие бота (`/start`) как ссылка на веб. На VPS поставь туда публичный URL, например `https://money.example.com`.
+`WEB_ORIGIN` is used in the bot `/start` greeting as the web link. On a VPS set it to your public URL, e.g. `https://money.example.com`.
 
-## Авторизация
+## Auth
 
-Два слоя: скрытый URL + вход через Telegram (whitelist).
+Two layers: hidden URL + Telegram login (whitelist).
 
 ```text
-  Браузер
+  Browser
      │
      ▼
-  /k/<ACCESS_KEY>/          ← без ключа = 404 (сайт «не существует»)
+  /k/<ACCESS_KEY>/          ← wrong/missing key = 404 (site “does not exist”)
      │
      ▼
   Login page
      │
      ├─ Production: Telegram Login Widget
      │     → POST /auth/telegram
-     │     → проверка hash бот-токеном
+     │     → hash check with bot token
      │     → id ∈ ALLOWED_TELEGRAM_IDS
      │
-     └─ Development: кнопка «Войти (dev)»
+     └─ Development: “Sign in (dev)” button
            → POST /auth/dev-login
-           → id из whitelist (или 1)
+           → id from whitelist (or 1)
      │
      ▼
-  Cookie mf_session (HttpOnly, 30 дней, HMAC через SESSION_SECRET)
+  Cookie mf_session (HttpOnly, 30 days, HMAC via SESSION_SECRET)
      │
      ▼
-  Dashboard / API — каждый запрос с cookie
-     нет cookie / чужой id → 401
+  Dashboard / API — every request needs the cookie
+     missing cookie / foreign id → 401
 ```
 
-| Шаг          | Что происходит                                                       |
-| ------------ | -------------------------------------------------------------------- |
-| 1. URL       | Нужен `ACCESS_KEY` в пути. Один ключ на весь проект — общая «дверь». |
-| 2. Логин     | Telegram подтверждает личность (или dev-login локально).             |
-| 3. Whitelist | Входят только `user_id` из `ALLOWED_TELEGRAM_IDS`.                   |
-| 4. Сессия    | Сервер ставит подписанную cookie `mf_session`.                       |
-| 5. API       | Без валидной cookie данные не отдаются. «Выйти» удаляет cookie.      |
+| Step         | What happens                                                              |
+| ------------ | ------------------------------------------------------------------------- |
+| 1. URL       | `ACCESS_KEY` must be in the path. One shared key for the whole project.   |
+| 2. Login     | Telegram proves identity (or dev-login locally).                          |
+| 3. Whitelist | Only `user_id`s from `ALLOWED_TELEGRAM_IDS` can enter.                    |
+| 4. Session   | Server sets a signed `mf_session` cookie.                                 |
+| 5. API       | No valid cookie → no data. Logout clears the cookie.                      |
 
-Бот использует тот же whitelist: посторонним отвечает «Доступ закрыт».
+The bot uses the same whitelist: outsiders get “Access denied”.
 
-Для Telegram Login на вебе задай `VITE_TELEGRAM_BOT_USERNAME` (без `@`) и в [BotFather](https://t.me/BotFather) привяжи домен к Login Widget.
+For Telegram Login on the web, set `VITE_TELEGRAM_BOT_USERNAME` (without `@`) and attach your domain to the Login Widget in [BotFather](https://t.me/BotFather).
 
 ## API
 
-Базовый префикс:
+Base prefix:
 
 ```text
 /k/<ACCESS_KEY>/api/...
 ```
 
-Почти все ручки (кроме login / me / logout) требуют cookie `mf_session`.
+Almost every route (except login / me / logout) requires the `mf_session` cookie.
 
-### Служебные
+### Ops
 
-| Метод | Путь      | Описание                       |
-| ----- | --------- | ------------------------------ |
-| `GET` | `/health` | Healthcheck **без** access key |
+| Method | Path      | Description                         |
+| ------ | --------- | ----------------------------------- |
+| `GET`  | `/health` | Healthcheck **without** access key  |
 
 ### Auth
 
-| Метод  | Путь                  | Auth            | Описание                               |
-| ------ | --------------------- | --------------- | -------------------------------------- |
-| `POST` | `/api/auth/telegram`  | —               | Вход через Telegram Login Widget       |
-| `POST` | `/api/auth/dev-login` | —               | Dev-вход (`NODE_ENV=development` only) |
-| `POST` | `/api/auth/logout`    | —               | Удалить cookie                         |
-| `GET`  | `/api/auth/me`        | cookie optional | Текущий пользователь или `null`        |
+| Method | Path                  | Auth            | Description                              |
+| ------ | --------------------- | --------------- | ---------------------------------------- |
+| `POST` | `/api/auth/telegram`  | —               | Sign in via Telegram Login Widget        |
+| `POST` | `/api/auth/dev-login` | —               | Dev sign-in (`NODE_ENV=development` only)|
+| `POST` | `/api/auth/logout`    | —               | Clear cookie                             |
+| `GET`  | `/api/auth/me`        | cookie optional | Current user or `null`                   |
 
 ### Settings
 
-| Метод   | Путь            | Описание                                    |
-| ------- | --------------- | ------------------------------------------- |
-| `GET`   | `/api/settings` | Валюта, стартовый баланс, промпт, модель AI |
-| `PATCH` | `/api/settings` | Обновить настройки                          |
+| Method  | Path            | Description                                   |
+| ------- | --------------- | --------------------------------------------- |
+| `GET`   | `/api/settings` | Currency, opening balance, prompt, AI model   |
+| `PATCH` | `/api/settings` | Update settings                               |
 
 ### Categories
 
-| Метод    | Путь                    | Описание                       |
+| Method   | Path                    | Description                    |
 | -------- | ----------------------- | ------------------------------ |
-| `GET`    | `/api/categories?type=` | Список (`expense` \| `income`) |
-| `POST`   | `/api/categories`       | Создать                        |
-| `PATCH`  | `/api/categories/:id`   | Обновить                       |
-| `DELETE` | `/api/categories/:id`   | Удалить                        |
+| `GET`    | `/api/categories?type=` | List (`expense` \| `income`)   |
+| `POST`   | `/api/categories`       | Create                         |
+| `PATCH`  | `/api/categories/:id`   | Update                         |
+| `DELETE` | `/api/categories/:id`   | Delete                         |
 
 ### Transactions
 
-| Метод    | Путь                    | Описание                                                                                                                |
-| -------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `GET`    | `/api/transactions`     | Список страницами. Query: `from`, `to`, `type`, `categoryId`, `limit`, `cursor`; ответ `{ items, nextCursor, hasMore }` |
-| `GET`    | `/api/transactions/:id` | Одна операция                                                                                                           |
-| `POST`   | `/api/transactions`     | Создать вручную                                                                                                         |
-| `PATCH`  | `/api/transactions/:id` | Изменить                                                                                                                |
-| `DELETE` | `/api/transactions/:id` | Удалить                                                                                                                 |
+| Method   | Path                    | Description                                                                                                              |
+| -------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `GET`    | `/api/transactions`     | Paginated list. Query: `from`, `to`, `type`, `categoryId`, `limit`, `cursor`; response `{ items, nextCursor, hasMore }` |
+| `GET`    | `/api/transactions/:id` | Single transaction                                                                                                       |
+| `POST`   | `/api/transactions`     | Create manually                                                                                                          |
+| `PATCH`  | `/api/transactions/:id` | Update                                                                                                                   |
+| `DELETE` | `/api/transactions/:id` | Delete                                                                                                                   |
 
 ### Stats
 
-| Метод | Путь                                         | Описание                                             |
-| ----- | -------------------------------------------- | ---------------------------------------------------- |
-| `GET` | `/api/stats/summary?from&to`                 | Баланс, доход/расход периода, разбивка по категориям |
-| `GET` | `/api/stats/timeseries?from&to&granularity=` | Ряд: `day` \| `week` \| `month`                      |
+| Method | Path                                         | Description                                              |
+| ------ | -------------------------------------------- | -------------------------------------------------------- |
+| `GET`  | `/api/stats/summary?from&to`                 | Balance, period income/expense, category breakdown       |
+| `GET`  | `/api/stats/timeseries?from&to&granularity=` | Series: `day` \| `week` \| `month`                       |
 
 ### AI parse
 
-| Метод  | Путь         | Описание                                                                                                                      |
-| ------ | ------------ | ----------------------------------------------------------------------------------------------------------------------------- |
-| `POST` | `/api/parse` | Разобрать текст и/или изображение. Body: `{ text?, imageBase64?, imageMime?, save? }`. `save: false` — только JSON без записи |
+| Method | Path         | Description                                                                                                                       |
+| ------ | ------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| `POST` | `/api/parse` | Parse text and/or image. Body: `{ text?, imageBase64?, imageMime?, save? }`. `save: false` — JSON only, no write                  |
 
-Код ручек: [`apps/api/src/routes/api.ts`](apps/api/src/routes/api.ts)
+Route code: [`apps/api/src/routes/api.ts`](apps/api/src/routes/api.ts)
 
-### Примеры
+### Examples
 
 ```bash
 KEY=your-access-key
 BASE=http://localhost:3000/k/$KEY/api
 
-# Dev-логин (сохраняет cookie в jar)
+# Dev login (stores cookie in jar)
 curl -c cookies.txt -X POST "$BASE/auth/dev-login" \
   -H 'Content-Type: application/json' \
   -d '{"name":"Dev"}'
 
-# Сводка
+# Summary
 curl -b cookies.txt "$BASE/stats/summary"
 
-# Быстрая запись через AI
+# Quick entry via AI
 curl -b cookies.txt -X POST "$BASE/parse" \
   -H 'Content-Type: application/json' \
-  -d '{"text":"кофе 350"}'
+  -d '{"text":"coffee 350"}'
 ```
 
 ## Env
 
-| Переменная                   | Описание                                              |
-| ---------------------------- | ----------------------------------------------------- |
-| `ACCESS_KEY`                 | Секретный кусок URL (см. ниже)                        |
-| `SESSION_SECRET`             | Ключ подписи cookie-сессии (см. ниже)                 |
-| `TELEGRAM_BOT_TOKEN`         | Токен бота                                            |
-| `ALLOWED_TELEGRAM_IDS`       | Whitelist Telegram user id через запятую              |
-| `ROUTERAI_API_KEY`           | Ключ [RouterAI](https://routerai.ru/)                 |
-| `ROUTERAI_MODEL`             | Модель с vision, напр. `openai/gpt-4o`                |
-| `DATABASE_PATH`              | Путь к SQLite                                         |
-| `PORT`                       | Порт API                                              |
-| `WEB_ORIGIN`                 | Origin для CORS и ссылки бота (dev: `http://localhost:5173`, prod: `https://your.domain`) |
-| `VITE_TELEGRAM_BOT_USERNAME` | Username бота без `@` для Login Widget                |
+| Variable                     | Description                                                                   |
+| ---------------------------- | ----------------------------------------------------------------------------- |
+| `ACCESS_KEY`                 | Secret URL segment (see below)                                                |
+| `SESSION_SECRET`             | Cookie signing key (see below)                                                |
+| `TELEGRAM_BOT_TOKEN`         | Bot token                                                                     |
+| `ALLOWED_TELEGRAM_IDS`       | Comma-separated Telegram user id whitelist                                    |
+| `ROUTERAI_API_KEY`           | [RouterAI](https://routerai.ru/) key                                          |
+| `ROUTERAI_MODEL`             | Vision-capable model, e.g. `openai/gpt-4o`                                    |
+| `DATABASE_PATH`              | SQLite path                                                                   |
+| `PORT`                       | API port                                                                      |
+| `WEB_ORIGIN`                 | CORS origin + bot link (dev: `http://localhost:5173`, VPS by IP: `http://x.x.x.x`) |
+| `VITE_TELEGRAM_BOT_USERNAME` | Bot username without `@` for Login Widget (needs domain + HTTPS; unused on bare IP) |
 
-### Что делают `ACCESS_KEY` и `SESSION_SECRET`
+### What `ACCESS_KEY` and `SESSION_SECRET` do
 
-**`ACCESS_KEY`** — «невидимая дверь» в URL.
+**`ACCESS_KEY`** — an “invisible door” in the URL.
 
-- Приложение открывается только по адресу вида  
-  `https://твой-домен/k/<ACCESS_KEY>/`  
-  (локально: `http://localhost:5173/k/<ACCESS_KEY>/`).
-- API тоже живёт под тем же префиксом: `/k/<ACCESS_KEY>/api/...`.
-- Неверный ключ → `404`. Случайный человек с доменом без ключа сайт не увидит.
-- Это не полноценный пароль, а скрытие URL. Вместе с Telegram whitelist этого достаточно для личного проекта.
-- В production поставь длинную случайную строку (16+ символов) и никому не свети ссылку.
+- The app only opens at  
+  `http://x.x.x.x/k/<ACCESS_KEY>/` (or a domain once you have one)  
+  (local: `http://localhost:5173/k/<ACCESS_KEY>/`).
+- The API lives under the same prefix: `/k/<ACCESS_KEY>/api/...`.
+- Wrong key → `404`. Someone who only knows the host never sees the site.
+- Not a full password — URL obscurity. Together with the Telegram whitelist this is enough for a personal project.
+- In production use a long random string (16+ chars) and don’t share the link.
 
-**`SESSION_SECRET`** — секрет для подписи cookie после логина.
+**`SESSION_SECRET`** — secret used to sign the cookie after login.
 
-- После входа через Telegram (или dev-login) сервер кладёт HttpOnly cookie `mf_session`.
-- Cookie подписана HMAC с этим секретом: подделать сессию без него нельзя.
-- Если сменить `SESSION_SECRET` — все текущие сессии сразу станут невалидны (нужен повторный вход).
-- В production тоже длинная случайная строка, **другая**, чем `ACCESS_KEY`.
+- After Telegram login (or dev-login) the server sets an HttpOnly `mf_session` cookie.
+- The cookie is HMAC-signed with this secret: forging a session without it is not possible.
+- Changing `SESSION_SECRET` invalidates all current sessions (users must sign in again).
+- In production use another long random string, **different** from `ACCESS_KEY`.
 
-Пример генерации:
+Generate examples:
 
 ```bash
 openssl rand -hex 16   # ACCESS_KEY
 openssl rand -hex 32   # SESSION_SECRET
 ```
 
-## Деплой на VPS
+## Deploy on a VPS
 
-Стенд деплоится через GitHub Actions: push в `main` → rsync на VPS → `docker compose up -d --build` (приложение + Caddy с HTTPS).
+Deployed via GitHub Actions: push to `main` → rsync to VPS → `docker compose up -d --build` (app + Caddy on **HTTP :80**, no TLS).
 
-Публичный URL: `https://your.domain/k/<ACCESS_KEY>/`  
-Healthcheck: `https://your.domain/health`
+Public URL: `http://<SERVER_IP>/k/<ACCESS_KEY>/`  
+Healthcheck: `http://<SERVER_IP>/health`
 
-### Один раз на VPS
+### Once on the VPS
 
-1. Ubuntu/Debian, Docker + Compose plugin, открыты порты 80/443.
-2. DNS A-запись домена → IP сервера.
-3. Пользователь деплоя с SSH-ключом (публичный ключ в `~/.ssh/authorized_keys`).
-4. Каталог, например `/opt/moneyflow` (создаётся workflow’ом).
+1. Ubuntu/Debian, Docker + Compose plugin, port **80** open.
+2. Deploy user with an SSH key (public key in `~/.ssh/authorized_keys`).
+3. Directory, e.g. `/opt/moneyflow` (created by the workflow).
 
 ### GitHub Secrets
 
-**Деплой**
+**Deploy**
 
-| Secret | Пример |
-| ------ | ------ |
-| `DEPLOY_HOST` | IP сервера или hostname |
-| `DEPLOY_USER` | `root` или `deploy` |
-| `DEPLOY_SSH_KEY` | private key деплоя |
+| Secret | Example |
+| ------ | ------- |
+| `DEPLOY_HOST` | Server IP |
+| `DEPLOY_USER` | `root` or `deploy` |
+| `DEPLOY_SSH_KEY` | Deploy private key |
 | `DEPLOY_PATH` | `/opt/moneyflow` |
 
-**Приложение** (workflow пишет `.env` на сервер)
+**App** (workflow writes `.env` on the server)
 
-| Secret | Обязательно |
-| ------ | ----------- |
-| `DOMAIN` | hostname без схемы (для Caddy / TLS) |
-| `WEB_ORIGIN` | `https://your.domain` |
-| `ACCESS_KEY` | да (≥8) |
-| `SESSION_SECRET` | да (≥8) |
-| `TELEGRAM_BOT_TOKEN` | для бота |
+| Secret | Required |
+| ------ | -------- |
+| `WEB_ORIGIN` | `http://x.x.x.x` (same as public IP) |
+| `ACCESS_KEY` | yes (≥8) |
+| `SESSION_SECRET` | yes (≥8) |
+| `TELEGRAM_BOT_TOKEN` | for the bot |
 | `ALLOWED_TELEGRAM_IDS` | whitelist |
-| `VITE_TELEGRAM_BOT_USERNAME` | Login Widget (без `@`) |
-| `ROUTERAI_API_KEY` | для AI |
-| `ROUTERAI_BASE_URL` / `ROUTERAI_MODEL` | опционально |
+| `VITE_TELEGRAM_BOT_USERNAME` | optional on bare IP (Login Widget won’t work) |
+| `ROUTERAI_API_KEY` | for AI |
+| `ROUTERAI_BASE_URL` / `ROUTERAI_MODEL` | optional |
 
-`NODE_ENV`, `PORT`, `DATABASE_PATH` задаются в compose/workflow.
+`NODE_ENV`, `PORT`, `DATABASE_PATH` are set in compose/workflow.
 
-В BotFather привяжи свой домен к Login Widget.
+### Auth without a domain
 
-### Локально без GitHub
+| Channel | Works on bare IP? |
+| ------- | ----------------- |
+| Telegram bot (chat) | Yes |
+| Web Telegram Login Widget | No (needs hostname in BotFather + usually HTTPS) |
+| Dev-login | No in `NODE_ENV=production` |
+
+Use the **bot** until you have a domain and switch Caddy to TLS.
+
+### Locally without GitHub
 
 ```bash
 cp .env.example .env
-# ACCESS_KEY, SESSION_SECRET, DOMAIN=your.domain, WEB_ORIGIN=https://your.domain, …
+# ACCESS_KEY, SESSION_SECRET, WEB_ORIGIN=http://x.x.x.x, …
 docker compose up -d --build
 ```
 
-Ручной старт без Docker:
+Manual start without Docker:
 
 ```bash
 npm install
@@ -271,12 +271,13 @@ npm run build
 NODE_ENV=production npm start
 ```
 
-Бот стартует polling в том же процессе, что и API.
-## Возможности MVP
+The bot starts polling in the same process as the API.
 
-- Парсинг текста, чеков и скринов истории банка (фото не хранится; список → N операций, чек → одна)
-- Категории с Lucide-иконкой и опциональным промптом
-- Глобальный промпт категоризации в настройках
-- Баланс = стартовый + доходы − расходы
-- Графики доходов/расходов и структура трат
-- Фильтры операций по датам / типу / категории
+## MVP features
+
+- Parse text, receipts, and bank history screenshots (photos are not stored; list → N transactions, receipt → one)
+- Categories with a Lucide icon and an optional prompt
+- Global categorization prompt in settings
+- Balance = opening + income − expenses
+- Income/expense charts and spend structure
+- Transaction filters by date / type / category

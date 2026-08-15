@@ -31,7 +31,6 @@ jobs:
         env:
           ACCESS_KEY: ${{ secrets.ACCESS_KEY }}
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
-          DOMAIN: ${{ secrets.DOMAIN }}
           WEB_ORIGIN: ${{ secrets.WEB_ORIGIN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           ALLOWED_TELEGRAM_IDS: ${{ secrets.ALLOWED_TELEGRAM_IDS }}
@@ -43,12 +42,10 @@ jobs:
           set -euo pipefail
           test -n "${ACCESS_KEY}"
           test -n "${SESSION_SECRET}"
-          test -n "${DOMAIN}"
           test -n "${WEB_ORIGIN}"
           {
             echo "ACCESS_KEY=${ACCESS_KEY}"
             echo "SESSION_SECRET=${SESSION_SECRET}"
-            echo "DOMAIN=${DOMAIN}"
             echo "WEB_ORIGIN=${WEB_ORIGIN}"
             echo "TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}"
             echo "ALLOWED_TELEGRAM_IDS=${ALLOWED_TELEGRAM_IDS:-}"
