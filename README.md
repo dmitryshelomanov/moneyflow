@@ -2,6 +2,22 @@
 
 Личный учёт денег: Telegram-бот (текст / фото чека / скрин списка трат) → RouterAI → SQLite → веб-дашборд.
 
+## Скриншоты
+
+Данные на скринах демо-сгенерированы (без реальных сумм, мерчантов и карт).
+
+### Обзор
+
+![Дашборд MoneyFlow](docs/screenshots/dashboard.png)
+
+### Операции
+
+![Список операций](docs/screenshots/transactions.png)
+
+### Категории
+
+![Управление категориями](docs/screenshots/categories.png)
+
 ## Стек
 
 - `apps/api` — Hono + Drizzle + SQLite + grammY
@@ -167,7 +183,7 @@ curl -b cookies.txt -X POST "$BASE/parse" \
 | `ROUTERAI_MODEL`             | Модель с vision, напр. `openai/gpt-4o`                |
 | `DATABASE_PATH`              | Путь к SQLite                                         |
 | `PORT`                       | Порт API                                              |
-| `WEB_ORIGIN`                 | Origin фронта для CORS (dev: `http://localhost:5173`) |
+| `WEB_ORIGIN`                 | Origin для CORS и ссылки бота (dev: `http://localhost:5173`, prod: `https://your.domain`) |
 | `VITE_TELEGRAM_BOT_USERNAME` | Username бота без `@` для Login Widget                |
 
 ### Что делают `ACCESS_KEY` и `SESSION_SECRET`
@@ -198,16 +214,64 @@ openssl rand -hex 32   # SESSION_SECRET
 
 ## Деплой на VPS
 
+Стенд деплоится через GitHub Actions: push в `main` → rsync на VPS → `docker compose up -d --build` (приложение + Caddy с HTTPS).
+
+Публичный URL: `https://your.domain/k/<ACCESS_KEY>/`  
+Healthcheck: `https://your.domain/health`
+
+### Один раз на VPS
+
+1. Ubuntu/Debian, Docker + Compose plugin, открыты порты 80/443.
+2. DNS A-запись домена → IP сервера.
+3. Пользователь деплоя с SSH-ключом (публичный ключ в `~/.ssh/authorized_keys`).
+4. Каталог, например `/opt/moneyflow` (создаётся workflow’ом).
+
+### GitHub Secrets
+
+**Деплой**
+
+| Secret | Пример |
+| ------ | ------ |
+| `DEPLOY_HOST` | IP сервера или hostname |
+| `DEPLOY_USER` | `root` или `deploy` |
+| `DEPLOY_SSH_KEY` | private key деплоя |
+| `DEPLOY_PATH` | `/opt/moneyflow` |
+
+**Приложение** (workflow пишет `.env` на сервер)
+
+| Secret | Обязательно |
+| ------ | ----------- |
+| `DOMAIN` | hostname без схемы (для Caddy / TLS) |
+| `WEB_ORIGIN` | `https://your.domain` |
+| `ACCESS_KEY` | да (≥8) |
+| `SESSION_SECRET` | да (≥8) |
+| `TELEGRAM_BOT_TOKEN` | для бота |
+| `ALLOWED_TELEGRAM_IDS` | whitelist |
+| `VITE_TELEGRAM_BOT_USERNAME` | Login Widget (без `@`) |
+| `ROUTERAI_API_KEY` | для AI |
+| `ROUTERAI_BASE_URL` / `ROUTERAI_MODEL` | опционально |
+
+`NODE_ENV`, `PORT`, `DATABASE_PATH` задаются в compose/workflow.
+
+В BotFather привяжи свой домен к Login Widget.
+
+### Локально без GitHub
+
+```bash
+cp .env.example .env
+# ACCESS_KEY, SESSION_SECRET, DOMAIN=your.domain, WEB_ORIGIN=https://your.domain, …
+docker compose up -d --build
+```
+
+Ручной старт без Docker:
+
 ```bash
 npm install
 npm run build
 NODE_ENV=production npm start
 ```
 
-Поставь nginx / caddy reverse-proxy на порт `PORT`. Бот стартует polling в том же процессе.
-
-Домен: `https://your.domain/k/<ACCESS_KEY>/`
-
+Бот стартует polling в том же процессе, что и API.
 ## Возможности MVP
 
 - Парсинг текста, чеков и скринов истории банка (фото не хранится; список → N операций, чек → одна)
