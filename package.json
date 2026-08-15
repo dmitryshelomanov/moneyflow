@@ -1,0 +1,32 @@
+{
+  "name": "moneyflow",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n api,web -c cyan,magenta \"npm exec -w @moneyflow/api tsx watch src/index.ts\" \"npm exec -w @moneyflow/web vite\"",
+    "dev:api": "npm run dev -w @moneyflow/api",
+    "dev:web": "npm run dev -w @moneyflow/web",
+    "build": "npm run build -w @moneyflow/shared && npm run build -w @moneyflow/web && npm run build -w @moneyflow/api",
+    "start": "npm run start -w @moneyflow/api",
+    "db:generate": "npm run db:generate -w @moneyflow/api",
+    "db:migrate": "npm run db:migrate -w @moneyflow/api",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "concurrently": "^9.2.4",
+    "eslint": "^9.39.5",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.9.0",
+    "prettier": "^3.9.6",
+    "typescript-eslint": "^8.67.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
