@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type {
   Account,
@@ -6,6 +13,7 @@ import type {
   Transaction,
   TransactionType,
 } from "@moneyflow/shared";
+import useInfiniteScroll from "react-infinite-scroll-hook";
 import { useSearchParams } from "react-router-dom";
 import {
   accountKeys,
@@ -22,12 +30,7 @@ import {
   useTransactionsInfiniteQuery,
 } from "@/entities/transaction/model/queries";
 import { usePeriod } from "@/features/period/model/period-context";
-import {
-  dayKey,
-  formatDayLabel,
-  periodDefaults,
-  toIsoRange,
-} from "@/shared/lib/date";
+import { dayKey, formatDayLabel, toIsoRange } from "@/shared/lib/date";
 import { useDebouncedValue } from "@/shared/lib/use-debounced-value";
 
 type TransactionForm = {
@@ -39,16 +42,15 @@ type TransactionForm = {
   categoryId: string;
 };
 
+type PeriodRange = {
+  from: string;
+  to: string;
+};
+
 type InitialPeriodParams = {
   fromParam: string | null;
   toParam: string | null;
-  defaults: ReturnType<typeof periodDefaults>;
-};
-
-type PagingState = {
-  hasNextPage: boolean | undefined;
-  isFetchingNextPage: boolean;
-  isPending: boolean;
+  defaults: PeriodRange;
 };
 
 type BulkUpdateInput = {
@@ -76,12 +78,28 @@ function resolveInitialPeriod({
   };
 }
 
-function getCanFetchNextPage({
-  hasNextPage,
-  isFetchingNextPage,
-  isPending,
-}: PagingState) {
-  return Boolean(hasNextPage) && !isFetchingNextPage && !isPending;
+function usePinWindowScroll(isAppending: boolean, itemCount: number) {
+  // Browsers keep the viewport glued to the document bottom when rows are
+  // appended there. Pin scrollY until the fetch finishes so new items grow
+  // below the screen instead of pulling the page down.
+  const pinnedYRef = useRef<number | null>(null);
+
+  const pin = useCallback(() => {
+    pinnedYRef.current ??= window.scrollY;
+  }, []);
+
+  const unpin = useCallback(() => {
+    pinnedYRef.current = null;
+  }, []);
+
+  useLayoutEffect(() => {
+    const pinnedY = pinnedYRef.current;
+    if (pinnedY == null) return;
+    window.scrollTo(0, pinnedY);
+    if (!isAppending) pinnedYRef.current = null;
+  }, [itemCount, isAppending]);
+
+  return { pin, unpin };
 }
 
 function groupTransactionsByDay(items: Transaction[]) {
@@ -109,17 +127,24 @@ function groupTransactionsByDay(items: Transaction[]) {
 
 export function useTransactionsPage() {
   const queryClient = useQueryClient();
-  const { period, setPeriod } = usePeriod();
-  const { from, to } = period;
+  const { period: dashboardPeriod } = usePeriod();
   const [searchParams] = useSearchParams();
-  const defaultsRef = useRef(periodDefaults());
-  const defaults = defaultsRef.current;
+  const periodFallbackRef = useRef(dashboardPeriod);
+  const periodFallback = periodFallbackRef.current;
   const fromParam = searchParams.get("from");
   const toParam = searchParams.get("to");
   const typeParam = searchParams.get("type");
   const accountIdParam = searchParams.get("accountId");
   const categoryIdParam = searchParams.get("categoryId");
   const qParam = searchParams.get("q");
+  const [period, setPeriod] = useState(() =>
+    resolveInitialPeriod({
+      fromParam,
+      toParam,
+      defaults: periodFallback,
+    }),
+  );
+  const { from, to } = period;
   const [type, setType] = useState<"" | TransactionType>(
     parseTransactionType(typeParam),
   );
@@ -137,23 +162,27 @@ export function useTransactionsPage() {
   });
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (fromParam || toParam) {
-      setPeriod(resolveInitialPeriod({ fromParam, toParam, defaults }));
+      setPeriod(
+        resolveInitialPeriod({
+          fromParam,
+          toParam,
+          defaults: periodFallback,
+        }),
+      );
     }
     setType(parseTransactionType(typeParam));
     setAccountId(accountIdParam ?? "");
     setCategoryId(categoryIdParam ?? "");
     setQ(normalizeSearchQuery(qParam));
   }, [
-    categoryIdParam,
     accountIdParam,
-    defaults,
+    categoryIdParam,
     fromParam,
+    periodFallback,
     qParam,
-    setPeriod,
     toParam,
     typeParam,
   ]);
@@ -249,25 +278,35 @@ export function useTransactionsPage() {
     () => items.filter((tx) => selectedSet.has(tx.id)),
     [items, selectedSet],
   );
-  const canFetchNextPage = getCanFetchNextPage({
-    hasNextPage: transactionsQuery.hasNextPage,
-    isFetchingNextPage: transactionsQuery.isFetchingNextPage,
-    isPending: transactionsQuery.isPending,
+
+  const { pin: pinWindowScroll, unpin: unpinWindowScroll } = usePinWindowScroll(
+    transactionsQuery.isFetchingNextPage,
+    items.length,
+  );
+
+  const loadMore = useCallback(() => {
+    pinWindowScroll();
+    void transactionsQuery.fetchNextPage();
+  }, [pinWindowScroll, transactionsQuery.fetchNextPage]);
+
+  const [infiniteRef] = useInfiniteScroll({
+    loading: transactionsQuery.isFetchingNextPage,
+    hasNextPage: Boolean(transactionsQuery.hasNextPage),
+    onLoadMore: loadMore,
+    disabled: transactionsQuery.isError,
   });
 
   useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (!entries[0]?.isIntersecting || !canFetchNextPage) return;
-        void transactionsQuery.fetchNextPage();
-      },
-      { rootMargin: "200px 0px" },
-    );
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [canFetchNextPage, transactionsQuery.fetchNextPage]);
+    unpinWindowScroll();
+  }, [
+    accountId,
+    categoryId,
+    debouncedQ,
+    fromIso,
+    toIso,
+    type,
+    unpinWindowScroll,
+  ]);
 
   useEffect(() => {
     setSelectedIds((prev) =>
@@ -333,7 +372,7 @@ export function useTransactionsPage() {
       selectedCount: selectedItems.length,
     },
     refs: {
-      sentinelRef,
+      infiniteRef,
     },
     queries: {
       transactionsQuery,

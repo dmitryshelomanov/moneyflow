@@ -35,6 +35,10 @@ body {
   letter-spacing: -0.025em;
 }
 
+.overflow-anchor-none {
+  overflow-anchor: none;
+}
+
 @keyframes float {
   0%,
   100% {

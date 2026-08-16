@@ -55,7 +55,7 @@ type TransactionsListProps = {
   bulkUpdateError: string | null;
   isFetchingNextPage: boolean;
   hasNextPage: boolean;
-  sentinelRef: React.RefObject<HTMLDivElement | null>;
+  infiniteRef: React.RefCallback<HTMLElement>;
   onDelete: (id: string) => Promise<void>;
   onToggleSelectionMode: () => void;
   onToggleSelected: (id: string) => void;
@@ -100,7 +100,7 @@ export function TransactionsList({
   bulkUpdateError,
   isFetchingNextPage,
   hasNextPage,
-  sentinelRef,
+  infiniteRef,
   onDelete,
   onToggleSelectionMode,
   onToggleSelected,
@@ -137,7 +137,7 @@ export function TransactionsList({
 
   return (
     <>
-      <GlassCard className="overflow-hidden p-0">
+      <GlassCard className="overflow-anchor-none overflow-hidden p-0">
         <div className="flex items-center justify-between gap-3 border-b border-black/10 px-4 py-3 md:px-5">
           <div className="text-sm font-medium text-black/75">
             {selectionMode ? `Выбрано: ${selectedCount}` : "Операции"}
@@ -273,11 +273,11 @@ export function TransactionsList({
                             />
                           </div>
                           <div className="min-w-0">
-                            <div className="truncate font-medium text-black">
+                            <div className="break-words font-medium text-black">
                               {cat?.name ?? "Без категории"}
                             </div>
                             {tx.note ? (
-                              <div className="truncate text-xs text-black/70">
+                              <div className="break-words whitespace-normal text-xs text-black/70">
                                 {tx.note}
                               </div>
                             ) : null}
@@ -369,18 +369,18 @@ export function TransactionsList({
             {deleteError}
           </div>
         ) : null}
-        {!isPending && !isError ? (
+        {!isPending &&
+        !isError &&
+        (hasNextPage || isFetchingNextPage || itemsCount > 0) ? (
           <div className="px-4 py-3 text-center text-sm text-black/55 md:px-5">
             {isFetchingNextPage
               ? "Подгружаем…"
-              : hasNextPage
-                ? "Прокрутите вниз для подгрузки"
-                : itemsCount > 0
-                  ? "Все операции загружены"
-                  : ""}
+              : !hasNextPage
+                ? "Все операции загружены"
+                : null}
+            {hasNextPage ? <div ref={infiniteRef} className="h-1" /> : null}
           </div>
         ) : null}
-        <div ref={sentinelRef} className="h-1" />
       </GlassCard>
 
       <Dialog

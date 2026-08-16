@@ -147,7 +147,7 @@ export function TransactionsPage() {
         updateAccountError={updateAccountError}
         isFetchingNextPage={queries.transactionsQuery.isFetchingNextPage}
         hasNextPage={hasNextPage}
-        sentinelRef={refs.sentinelRef}
+        infiniteRef={refs.infiniteRef}
         onDelete={onDelete}
         onToggleSelectionMode={actions.toggleSelectionMode}
         onToggleSelected={actions.toggleSelected}
