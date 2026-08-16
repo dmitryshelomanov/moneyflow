@@ -5,8 +5,6 @@ import { DateRangePicker } from "@/widgets/date-range/date-range-picker";
 import { CashflowChart } from "@/widgets/charts/cashflow-chart";
 import { CategoryPieChart } from "@/widgets/charts/category-pie-chart";
 import { TotalMoneyChart } from "@/widgets/charts/total-money-chart";
-import { WaterfallChart } from "@/widgets/charts/waterfall-chart";
-import { BurnRateChart } from "@/widgets/charts/burn-rate-chart";
 import { ParetoChart } from "@/widgets/charts/pareto-chart";
 import { SpendingHeatmapChart } from "@/widgets/charts/spending-heatmap-chart";
 import { useAiSavings } from "@/features/ai-savings/model/use-ai-savings";
@@ -18,15 +16,8 @@ import { GlassCard } from "@/shared/ui/glass-card";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 
-function deltaLabel(value: number | null, currency: string, suffix = "") {
-  if (value == null) return "—";
-  const sign = value > 0 ? "+" : "";
-  if (suffix) return `${sign}${value}${suffix}`;
-  return `${sign}${formatMoney(value, currency)}`;
-}
-
 export function DashboardPage() {
-  const { state, actions, mutations } = useDashboard();
+  const { state, actions, mutations, queries } = useDashboard();
   const aiSavings = useAiSavings();
   const aiPulse = useAiPulse();
   const navigate = useNavigate();
@@ -59,12 +50,12 @@ export function DashboardPage() {
         allTimeFrom={state.allTimeFrom}
         large
         onChange={({ from: nextFrom, to: nextTo }) => {
-          actions.setFrom(nextFrom);
-          actions.setTo(nextTo);
+          actions.setPeriod({ from: nextFrom, to: nextTo });
         }}
       />
-      <div className="flex flex-wrap justify-end gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
         <Button
+          className="w-full sm:w-auto"
           size="sm"
           variant="default"
           disabled={!state.summary || aiPulse.isPending}
@@ -82,6 +73,7 @@ export function DashboardPage() {
           {aiPulse.isPending ? "Смотрю..." : "Как дела?"}
         </Button>
         <Button
+          className="w-full sm:w-auto"
           size="sm"
           variant="secondary"
           disabled={!state.summary || aiSavings.isPending}
@@ -99,7 +91,12 @@ export function DashboardPage() {
         >
           {aiSavings.isPending ? "Ищу варианты..." : "Где сэкономить?"}
         </Button>
-        <Button size="sm" variant="ghost" onClick={exportCsv}>
+        <Button
+          className="w-full sm:w-auto"
+          size="sm"
+          variant="ghost"
+          onClick={exportCsv}
+        >
           Экспорт CSV
         </Button>
       </div>
@@ -116,6 +113,27 @@ export function DashboardPage() {
             ? aiSavings.error.message
             : "Не удалось получить советы"}
         </p>
+      )}
+      {queries.dashboardQuery.isPending && !state.summary && (
+        <GlassCard>
+          <p className="text-sm text-black/60">Загрузка данных дашборда...</p>
+        </GlassCard>
+      )}
+      {queries.dashboardQuery.isError && (
+        <GlassCard className="space-y-3">
+          <p className="text-sm text-rose-600">
+            {queries.dashboardQuery.error instanceof Error
+              ? queries.dashboardQuery.error.message
+              : "Не удалось загрузить дашборд"}
+          </p>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => void queries.dashboardQuery.refetch()}
+          >
+            Повторить
+          </Button>
+        </GlassCard>
       )}
       {state.isLongRange ? (
         <div className="flex flex-wrap items-center gap-2">
@@ -153,9 +171,6 @@ export function DashboardPage() {
               ? formatMoney(state.summary.balance, state.summary.currency)
               : "—"}
           </div>
-          <div className="mt-1 text-[11px] text-black/55 md:text-xs">
-            vs прошлый период: {deltaLabel(state.delta.balance, currency)}
-          </div>
         </GlassCard>
         <GlassCard className="rounded-2xl p-3 md:rounded-[28px] md:p-5">
           <div className="text-[10px] uppercase tracking-[0.14em] text-black/55 md:text-xs md:tracking-[0.16em]">
@@ -166,9 +181,6 @@ export function DashboardPage() {
               ? formatMoney(state.summary.periodIncome, state.summary.currency)
               : "—"}
           </div>
-          <div className="mt-1 text-[11px] text-black/55 md:text-xs">
-            vs прошлый период: {deltaLabel(state.delta.periodIncome, currency)}
-          </div>
         </GlassCard>
         <GlassCard className="rounded-2xl p-3 md:rounded-[28px] md:p-5">
           <div className="text-[10px] uppercase tracking-[0.14em] text-black/55 md:text-xs md:tracking-[0.16em]">
@@ -178,9 +190,6 @@ export function DashboardPage() {
             {state.summary
               ? formatMoney(state.summary.periodExpense, state.summary.currency)
               : "—"}
-          </div>
-          <div className="mt-1 text-[11px] text-black/55 md:text-xs">
-            vs прошлый период: {deltaLabel(state.delta.periodExpense, currency)}
           </div>
         </GlassCard>
         <GlassCard className="rounded-2xl p-3 md:rounded-[28px] md:p-5">
@@ -194,10 +203,6 @@ export function DashboardPage() {
             {state.ratio == null
               ? "нет дохода в периоде"
               : "от дохода за период"}
-          </div>
-          <div className="mt-1 text-[11px] text-black/55 md:text-xs">
-            vs прошлый период:{" "}
-            {deltaLabel(state.delta.ratio, currency, " п.п.")}
           </div>
         </GlassCard>
       </div>
@@ -217,8 +222,8 @@ export function DashboardPage() {
         />
       </GlassCard>
 
-      <div className="grid gap-4 lg:grid-cols-5">
-        <GlassCard className="lg:col-span-3">
+      <div className="grid gap-4 md:grid-cols-5">
+        <GlassCard className="order-2 md:order-1 md:col-span-3">
           <CashflowChart
             series={state.series}
             currency={state.summary?.currency ?? "RUB"}
@@ -230,8 +235,8 @@ export function DashboardPage() {
           />
         </GlassCard>
 
-        <GlassCard className="lg:col-span-2">
-          <h2 className="mb-4 font-display text-xl text-black">
+        <GlassCard className="order-1 md:order-2 md:col-span-2">
+          <h2 className="mb-4 font-display text-lg text-black md:text-xl">
             Расходы по категориям
           </h2>
           <CategoryPieChart
@@ -252,26 +257,7 @@ export function DashboardPage() {
         </GlassCard>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <GlassCard>
-          <WaterfallChart
-            currency={currency}
-            balance={state.summary?.balance ?? 0}
-            periodIncome={state.summary?.periodIncome ?? 0}
-            periodExpense={state.summary?.periodExpense ?? 0}
-          />
-        </GlassCard>
-        <GlassCard>
-          <BurnRateChart
-            from={state.from}
-            to={state.to}
-            currency={currency}
-            daySeries={state.daySeries}
-          />
-        </GlassCard>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         <GlassCard>
           <ParetoChart items={state.expensePareto} currency={currency} />
         </GlassCard>
@@ -279,12 +265,14 @@ export function DashboardPage() {
           <SpendingHeatmapChart
             cells={state.expenseHeatmap}
             currency={currency}
+            from={state.from}
+            to={state.to}
           />
         </GlassCard>
       </div>
 
       <GlassCard>
-        <h2 className="mb-4 font-display text-xl text-black">
+        <h2 className="mb-4 font-display text-lg text-black md:text-xl">
           Доходы по категориям
         </h2>
         <CategoryPieChart

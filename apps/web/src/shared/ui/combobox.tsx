@@ -16,6 +16,8 @@ type ComboboxProps = {
   searchPlaceholder?: string;
   emptyText?: string;
   className?: string;
+  contentClassName?: string;
+  disabled?: boolean;
 };
 
 export function Combobox({
@@ -26,6 +28,8 @@ export function Combobox({
   searchPlaceholder = "Поиск…",
   emptyText = "Ничего не найдено",
   className,
+  contentClassName,
+  disabled = false,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false);
   const [search, setSearch] = React.useState("");
@@ -42,12 +46,19 @@ export function Combobox({
   }, [open]);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        if (disabled) return;
+        setOpen(next);
+      }}
+    >
       <PopoverTrigger asChild>
         <button
           type="button"
           role="combobox"
           aria-expanded={open}
+          disabled={disabled}
           className={cn(
             "flex h-11 w-full items-center justify-between rounded-2xl border-2 border-black/90 bg-[#fffdf5] px-4 text-sm text-black shadow-[0_3px_0_rgba(0,0,0,0.8)]",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/30 disabled:cursor-not-allowed disabled:opacity-50",
@@ -62,7 +73,10 @@ export function Combobox({
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="w-[var(--radix-popover-trigger-width)] overflow-hidden p-0"
+        className={cn(
+          "w-[var(--radix-popover-trigger-width)] min-w-[14rem] overflow-hidden p-0",
+          contentClassName,
+        )}
         onOpenAutoFocus={(event) => {
           event.preventDefault();
           inputRef.current?.focus();

@@ -177,7 +177,7 @@ export function TotalMoneyChart({
     <div className="space-y-4">
       <div>
         <div className="flex items-baseline justify-between gap-3">
-          <div className="font-display text-xl text-black md:text-2xl">
+          <div className="font-display text-lg text-black sm:text-xl md:text-2xl">
             Денег всего
           </div>
           {selected ? (
@@ -186,12 +186,12 @@ export function TotalMoneyChart({
             </div>
           ) : null}
         </div>
-        <div className="mt-1 font-display text-3xl tracking-tight text-black md:text-4xl">
+        <div className="mt-1 font-display text-2xl tracking-tight text-black sm:text-3xl md:text-4xl">
           {formatMoney(displayBalance, currency)}
         </div>
       </div>
 
-      <div className="h-48 md:h-56">
+      <div className="h-44 sm:h-48 md:h-56">
         {data.length === 0 ? (
           <div className="flex h-full items-center justify-center text-sm text-black/55">
             Нет данных за период

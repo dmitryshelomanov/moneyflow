@@ -12,27 +12,30 @@ import {
   useCategoriesQuery,
 } from "@/entities/category/model/queries";
 import { Button } from "@/shared/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/shared/ui/dialog";
 import { GlassCard } from "@/shared/ui/glass-card";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/shared/ui/select";
 import { Textarea } from "@/shared/ui/textarea";
+import { cn } from "@/shared/lib/cn";
 
 export function CategoriesPage() {
   const queryClient = useQueryClient();
-  const [promptDrafts, setPromptDrafts] = useState<Record<string, string>>({});
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [promptDraft, setPromptDraft] = useState("");
   const [form, setForm] = useState({
     name: "",
-    type: "expense" as "expense" | "income",
     icon: "Circle",
     prompt: "",
   });
+  const [mutationError, setMutationError] = useState<string | null>(null);
 
   const categoriesQuery = useCategoriesQuery();
 
@@ -56,40 +59,52 @@ export function CategoriesPage() {
     },
   });
   const items: Category[] = categoriesQuery.data ?? [];
+  const selected = items.find((cat) => cat.id === selectedId) ?? null;
+
+  function openCategory(cat: Category) {
+    setSelectedId(cat.id);
+    setPromptDraft(cat.prompt ?? "");
+  }
+
+  function closeCategory() {
+    setSelectedId(null);
+    setPromptDraft("");
+  }
+
+  async function savePrompt() {
+    if (!selected) return;
+    const nextPrompt = promptDraft.trim() || null;
+    const currentPrompt = selected.prompt ?? null;
+    setMutationError(null);
+    if (nextPrompt !== currentPrompt) {
+      try {
+        await updateCategoryMutation.mutateAsync({
+          id: selected.id,
+          prompt: nextPrompt,
+        });
+      } catch (error) {
+        setMutationError(
+          error instanceof Error
+            ? error.message
+            : "Не удалось сохранить категорию",
+        );
+        return;
+      }
+    }
+    closeCategory();
+  }
 
   return (
     <div className="space-y-6">
       <GlassCard className="space-y-4">
         <h2 className="font-display text-xl">Новая категория</h2>
-        <div className="grid gap-3 md:grid-cols-2">
-          <div>
-            <Label>Название</Label>
-            <Input
-              className="mt-1"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-            />
-          </div>
-          <div>
-            <Label>Тип</Label>
-            <Select
-              value={form.type}
-              onValueChange={(value) =>
-                setForm({
-                  ...form,
-                  type: value as "expense" | "income",
-                })
-              }
-            >
-              <SelectTrigger className="mt-1">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="expense">Расход</SelectItem>
-                <SelectItem value="income">Доход</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        <div>
+          <Label>Название</Label>
+          <Input
+            className="mt-1"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+          />
         </div>
         <div>
           <Label>Иконка</Label>
@@ -123,76 +138,164 @@ export function CategoriesPage() {
           disabled={createCategoryMutation.isPending}
           onClick={async () => {
             if (!form.name.trim()) return;
-            await createCategoryMutation.mutateAsync({
-              name: form.name.trim(),
-              type: form.type,
-              icon: resolveCategoryIconName({
-                icon: form.icon,
-                categoryName: form.name,
-                type: form.type,
-              }),
-              prompt: form.prompt || null,
-            });
-            setForm({ name: "", type: form.type, icon: "Circle", prompt: "" });
+            setMutationError(null);
+            try {
+              await createCategoryMutation.mutateAsync({
+                name: form.name.trim(),
+                icon: resolveCategoryIconName({
+                  icon: form.icon,
+                  categoryName: form.name,
+                }),
+                prompt: form.prompt || null,
+              });
+              setForm({ name: "", icon: "Circle", prompt: "" });
+            } catch (error) {
+              setMutationError(
+                error instanceof Error
+                  ? error.message
+                  : "Не удалось создать категорию",
+              );
+            }
           }}
         >
           Создать
         </Button>
+        {mutationError && (
+          <p className="text-sm text-rose-600">{mutationError}</p>
+        )}
       </GlassCard>
 
-      <div className="grid gap-3 md:grid-cols-2">
-        {items.map((cat) => (
-          <GlassCard key={cat.id} className="space-y-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border-2 border-black/90 bg-[#ffe8b8]">
-                  <CategoryIcon
-                    name={resolveCategoryIconName({
-                      icon: cat.icon,
-                      categoryName: cat.name,
-                      type: cat.type,
-                    })}
-                    className="h-5 w-5"
-                  />
+      {categoriesQuery.isPending && (
+        <GlassCard>
+          <p className="text-sm text-black/60">Загрузка категорий...</p>
+        </GlassCard>
+      )}
+      {categoriesQuery.isError && (
+        <GlassCard className="space-y-3">
+          <p className="text-sm text-rose-600">
+            {categoriesQuery.error instanceof Error
+              ? categoriesQuery.error.message
+              : "Не удалось загрузить категории"}
+          </p>
+          <Button size="sm" onClick={() => void categoriesQuery.refetch()}>
+            Повторить
+          </Button>
+        </GlassCard>
+      )}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        {items.map((cat) => {
+          const hasPrompt = Boolean(cat.prompt?.trim());
+          return (
+            <button
+              key={cat.id}
+              type="button"
+              onClick={() => openCategory(cat)}
+              className={cn(
+                "flex items-center gap-3 rounded-2xl border-2 border-black/90 bg-[#fffdf5] p-3 text-left shadow-[0_5px_0_rgba(0,0,0,0.82)] transition",
+                "hover:-translate-y-0.5 hover:bg-[#fff8e6] active:translate-y-0.5 active:shadow-[0_2px_0_rgba(0,0,0,0.82)]",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/35",
+                selectedId === cat.id && "bg-[#d8fb88]",
+              )}
+            >
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border-2 border-black/90 bg-[#ffe8b8]">
+                <CategoryIcon
+                  name={resolveCategoryIconName({
+                    icon: cat.icon,
+                    categoryName: cat.name,
+                  })}
+                  className="h-5 w-5"
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-medium text-black">
+                  {cat.name}
                 </div>
-                <div>
-                  <div className="font-medium text-black">{cat.name}</div>
-                  <div className="text-xs uppercase tracking-wider text-black/55">
-                    {cat.type === "expense" ? "Расход" : "Доход"}
-                  </div>
+                <div className="mt-0.5 truncate text-xs text-black/50">
+                  {hasPrompt ? "Промпт задан" : "Без промпта"}
                 </div>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={deleteCategoryMutation.isPending}
-                onClick={async () => {
-                  await deleteCategoryMutation.mutateAsync(cat.id);
-                }}
-              >
-                Удалить
-              </Button>
-            </div>
-            <Textarea
-              value={promptDrafts[cat.id] ?? cat.prompt ?? ""}
-              placeholder="Промпт категории"
-              onChange={(e) =>
-                setPromptDrafts((prev) => ({
-                  ...prev,
-                  [cat.id]: e.target.value,
-                }))
-              }
-              onBlur={async () => {
-                const promptValue = promptDrafts[cat.id] ?? cat.prompt ?? "";
-                await updateCategoryMutation.mutateAsync({
-                  id: cat.id,
-                  prompt: promptValue || null,
-                });
-              }}
-            />
-          </GlassCard>
-        ))}
+            </button>
+          );
+        })}
       </div>
+
+      <Dialog
+        open={selected !== null}
+        onOpenChange={(open) => {
+          if (!open) closeCategory();
+        }}
+      >
+        <DialogContent>
+          {selected ? (
+            <>
+              <DialogHeader>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border-2 border-black/90 bg-[#ffe8b8]">
+                    <CategoryIcon
+                      name={resolveCategoryIconName({
+                        icon: selected.icon,
+                        categoryName: selected.name,
+                      })}
+                      className="h-5 w-5"
+                    />
+                  </div>
+                  <div>
+                    <DialogTitle>{selected.name}</DialogTitle>
+                    <DialogDescription>
+                      Промпт помогает точнее относить операции к категории
+                    </DialogDescription>
+                  </div>
+                </div>
+              </DialogHeader>
+
+              <div>
+                <Label htmlFor="category-prompt">Промпт категории</Label>
+                <Textarea
+                  id="category-prompt"
+                  className="mt-1"
+                  autoFocus
+                  placeholder="Например: аптека, лекарства, БАДы"
+                  value={promptDraft}
+                  onChange={(e) => setPromptDraft(e.target.value)}
+                />
+              </div>
+
+              <DialogFooter>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  disabled={deleteCategoryMutation.isPending}
+                  onClick={async () => {
+                    if (
+                      !window.confirm(`Удалить категорию «${selected.name}»?`)
+                    )
+                      return;
+                    setMutationError(null);
+                    try {
+                      await deleteCategoryMutation.mutateAsync(selected.id);
+                      closeCategory();
+                    } catch (error) {
+                      setMutationError(
+                        error instanceof Error
+                          ? error.message
+                          : "Не удалось удалить категорию",
+                      );
+                    }
+                  }}
+                >
+                  Удалить
+                </Button>
+                <Button
+                  disabled={updateCategoryMutation.isPending}
+                  onClick={() => void savePrompt()}
+                >
+                  Сохранить
+                </Button>
+              </DialogFooter>
+            </>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

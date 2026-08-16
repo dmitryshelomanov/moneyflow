@@ -7,8 +7,6 @@ const ICON_REGISTRY = Icons as unknown as Record<
   ComponentType<LucideProps>
 >;
 
-type CategoryType = "expense" | "income";
-
 type IconSuggestionRule = {
   pattern: RegExp;
   icon: string;
@@ -60,11 +58,9 @@ function hasIconName(name?: string | null): name is string {
 export function resolveCategoryIconName({
   icon,
   categoryName,
-  type,
 }: {
   icon?: string | null;
   categoryName?: string | null;
-  type?: CategoryType;
 }) {
   const cleaned = icon?.trim();
   if (cleaned && cleaned !== "Circle" && hasIconName(cleaned)) {
@@ -78,7 +74,6 @@ export function resolveCategoryIconName({
     }
   }
 
-  if (type === "income") return "Wallet";
   return "Circle";
 }
 

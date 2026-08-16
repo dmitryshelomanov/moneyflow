@@ -234,7 +234,7 @@ export function CashflowChart({
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 md:space-y-5">
       <div>
         <div className="flex items-baseline justify-between gap-3">
           <div className="text-sm text-black/60">Остаток от дохода</div>
@@ -246,10 +246,10 @@ export function CashflowChart({
             <div className="text-xs text-black/45">Весь период</div>
           )}
         </div>
-        <div className="mt-1 font-display text-3xl tracking-tight text-black">
+        <div className="mt-1 font-display text-2xl tracking-tight text-black sm:text-3xl">
           {formatMoney(leftover, currency)}
         </div>
-        <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2">
+        <div className="mt-3 flex flex-wrap gap-x-3 gap-y-2 sm:gap-x-6">
           <div className="flex items-center gap-2">
             <span className="font-medium text-[#8b6ad8]">
               {formatMoney(expenseMinor, currency)}
@@ -269,11 +269,12 @@ export function CashflowChart({
             <span className="text-sm text-black/60">Доходы</span>
           </div>
         </div>
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-3 flex gap-1.5 overflow-x-auto pb-1 pr-1 sm:flex-wrap sm:gap-2">
           <Button
             size="sm"
             variant={mode === "absolute" ? "secondary" : "ghost"}
             onClick={() => setMode("absolute")}
+            className="shrink-0"
           >
             Абсолют
           </Button>
@@ -281,6 +282,7 @@ export function CashflowChart({
             size="sm"
             variant={mode === "percent" ? "secondary" : "ghost"}
             onClick={() => setMode("percent")}
+            className="shrink-0"
           >
             % от дохода
           </Button>
@@ -289,6 +291,7 @@ export function CashflowChart({
             variant={smoothTrend ? "secondary" : "ghost"}
             disabled={mode === "percent"}
             onClick={() => setSmoothTrend((prev) => !prev)}
+            className="shrink-0"
           >
             Сглаживание MA(3)
           </Button>
@@ -306,7 +309,7 @@ export function CashflowChart({
         ) : null}
       </div>
 
-      <div className="h-56">
+      <div className="h-52 sm:h-56 md:h-60">
         {barsAreEmpty ? (
           <div className="flex h-full items-center justify-center text-sm text-black/55">
             Нет данных за период
@@ -349,7 +352,7 @@ export function CashflowChart({
                         y={y + 12}
                         textAnchor="middle"
                         className={cn(
-                          "cursor-pointer text-[12px]",
+                          "cursor-pointer text-[11px] sm:text-[12px]",
                           active ? "fill-black font-semibold" : "fill-black/40",
                         )}
                         onClick={() => selectRow(data[index])}

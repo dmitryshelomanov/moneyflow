@@ -1,4 +1,10 @@
-import { ArrowDownRight, ArrowUpRight } from "lucide-react";
+import * as React from "react";
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  CheckSquare,
+  Trash2,
+} from "lucide-react";
 import type { Category, Transaction } from "@moneyflow/shared";
 import { formatMoney } from "@moneyflow/shared";
 import {
@@ -7,6 +13,7 @@ import {
 } from "@/entities/category/ui/category-icon";
 import { cn } from "@/shared/lib/cn";
 import { Button } from "@/shared/ui/button";
+import { Combobox } from "@/shared/ui/combobox";
 import { GlassCard } from "@/shared/ui/glass-card";
 
 type DayGroup = {
@@ -19,17 +26,31 @@ type DayGroup = {
 
 type TransactionsListProps = {
   groups: DayGroup[];
+  categories: Category[];
   catMap: Record<string, Category | undefined>;
+  hasActiveSearch: boolean;
   isPending: boolean;
   isError: boolean;
   errorMessage: string;
   itemsCount: number;
+  incomeTotalMinor: number;
+  expenseTotalMinor: number;
+  currency: string;
   isDeleting: boolean;
   deleteError: string | null;
+  selectionMode: boolean;
+  selectedIds: string[];
+  selectedCount: number;
+  isBulkUpdating: boolean;
+  bulkUpdateError: string | null;
   isFetchingNextPage: boolean;
   hasNextPage: boolean;
   sentinelRef: React.RefObject<HTMLDivElement | null>;
   onDelete: (id: string) => Promise<void>;
+  onToggleSelectionMode: () => void;
+  onToggleSelected: (id: string) => void;
+  onClearSelected: () => void;
+  onApplyBulkCategory: (categoryId: string | null) => Promise<void>;
 };
 
 function signedAmount(tx: Transaction) {
@@ -45,35 +66,125 @@ function formatSignedMoney(amountMinor: number, currency: string) {
 
 export function TransactionsList({
   groups,
+  categories,
   catMap,
+  hasActiveSearch,
   isPending,
   isError,
   errorMessage,
   itemsCount,
+  incomeTotalMinor,
+  expenseTotalMinor,
+  currency,
   isDeleting,
   deleteError,
+  selectionMode,
+  selectedIds,
+  selectedCount,
+  isBulkUpdating,
+  bulkUpdateError,
   isFetchingNextPage,
   hasNextPage,
   sentinelRef,
   onDelete,
+  onToggleSelectionMode,
+  onToggleSelected,
+  onClearSelected,
+  onApplyBulkCategory,
 }: TransactionsListProps) {
+  const emptyStateMessage = hasActiveSearch
+    ? "Ничего не найдено"
+    : "Нет операций за период";
+  const showTotals = !isPending && !isError && itemsCount > 0;
+  const categoryOptions = [
+    { value: "none", label: "Без категории" },
+    ...categories.map((c) => ({ value: c.id, label: c.name })),
+  ];
+  const [bulkCategoryValue, setBulkCategoryValue] = React.useState("none");
+  const selectedSet = React.useMemo(() => new Set(selectedIds), [selectedIds]);
+
+  React.useEffect(() => {
+    if (!selectionMode) setBulkCategoryValue("none");
+  }, [selectionMode]);
+
   return (
     <GlassCard className="overflow-hidden p-0">
+      <div className="flex items-center justify-between gap-3 border-b border-black/10 px-4 py-3 md:px-5">
+        <div className="text-sm font-medium text-black/75">
+          {selectionMode ? `Выбрано: ${selectedCount}` : "Операции"}
+        </div>
+        <Button
+          variant={selectionMode ? "secondary" : "ghost"}
+          size="sm"
+          onClick={onToggleSelectionMode}
+        >
+          {selectionMode ? "Отмена" : "Выбрать"}
+        </Button>
+      </div>
+      {selectionMode ? (
+        <div className="space-y-2 border-b border-black/10 px-4 py-3 md:px-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <Combobox
+              value={bulkCategoryValue}
+              options={categoryOptions}
+              disabled={isBulkUpdating}
+              className="h-9 min-w-[13rem] rounded-xl border border-black/20 bg-white px-3 py-1.5 text-sm shadow-none"
+              onValueChange={setBulkCategoryValue}
+            />
+            <Button
+              size="sm"
+              disabled={isBulkUpdating || selectedCount === 0}
+              onClick={() =>
+                void onApplyBulkCategory(
+                  bulkCategoryValue === "none" ? null : bulkCategoryValue,
+                )
+              }
+            >
+              Применить к {selectedCount}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={isBulkUpdating || selectedCount === 0}
+              onClick={onClearSelected}
+            >
+              Очистить
+            </Button>
+          </div>
+        </div>
+      ) : null}
       {isPending ? (
-        <div className="px-5 py-10 text-center text-black/55">Загрузка…</div>
+        <div className="px-4 py-9 text-center text-black/55 md:px-5 md:py-10">
+          Загрузка…
+        </div>
       ) : isError ? (
-        <div className="px-5 py-10 text-center text-rose-600">
+        <div className="px-4 py-9 text-center text-rose-600 md:px-5 md:py-10">
           {errorMessage}
         </div>
       ) : itemsCount === 0 ? (
-        <div className="px-5 py-10 text-center text-black/55">
-          Нет операций за период
+        <div className="px-4 py-9 text-center text-black/55 md:px-5 md:py-10">
+          {emptyStateMessage}
         </div>
       ) : (
         <div className="divide-y divide-black/10">
+          {showTotals ? (
+            <div className="flex flex-wrap items-baseline justify-between gap-3 px-4 py-3 md:px-5 md:py-3.5">
+              <div className="text-sm font-medium text-black/70">
+                Итого по загруженным
+              </div>
+              <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-sm tabular-nums">
+                <div className="text-emerald-700">
+                  Доход: {formatSignedMoney(incomeTotalMinor, currency)}
+                </div>
+                <div className="text-rose-600">
+                  Расход: {formatSignedMoney(-expenseTotalMinor, currency)}
+                </div>
+              </div>
+            </div>
+          ) : null}
           {groups.map((group) => (
             <section key={group.key}>
-              <div className="flex items-baseline justify-between gap-3 px-5 pb-1 pt-5">
+              <div className="flex items-baseline justify-between gap-3 px-4 pb-1 pt-4 md:px-5 md:pt-5">
                 <h3 className="text-[15px] font-semibold tracking-tight text-black">
                   {group.label}
                 </h3>
@@ -90,19 +201,34 @@ export function TransactionsList({
                 {group.txs.map((tx) => {
                   const cat = tx.categoryId ? catMap[tx.categoryId] : null;
                   const isIncome = tx.type === "income";
+                  const isSelected = selectedSet.has(tx.id);
                   const iconName = cat
                     ? resolveCategoryIconName({
                         icon: cat.icon,
                         categoryName: cat.name,
-                        type: cat.type,
                       })
                     : "Circle";
                   return (
                     <div
                       key={tx.id}
-                      className="flex items-center justify-between gap-4 px-5 py-3.5"
+                      className="flex items-center justify-between gap-3 px-4 py-3 md:gap-4 md:px-5 md:py-3.5"
                     >
                       <div className="flex min-w-0 items-center gap-3">
+                        {selectionMode ? (
+                          <button
+                            type="button"
+                            aria-label="Выбрать операцию"
+                            className={cn(
+                              "flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2",
+                              isSelected
+                                ? "border-black bg-[#d8fb88] text-black"
+                                : "border-black/30 bg-white text-transparent",
+                            )}
+                            onClick={() => onToggleSelected(tx.id)}
+                          >
+                            <CheckSquare className="h-4 w-4" />
+                          </button>
+                        ) : null}
                         <div
                           className={cn(
                             "flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
@@ -142,14 +268,37 @@ export function TransactionsList({
                           )}
                           {formatSignedMoney(signedAmount(tx), tx.currency)}
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={isDeleting}
-                          onClick={() => void onDelete(tx.id)}
-                        >
-                          Удалить
-                        </Button>
+                        {selectionMode ? null : (
+                          <>
+                            <Button
+                              className="md:hidden"
+                              variant="ghost"
+                              size="icon"
+                              disabled={isDeleting}
+                              aria-label="Удалить операцию"
+                              onClick={() => {
+                                if (!window.confirm("Удалить эту операцию?"))
+                                  return;
+                                void onDelete(tx.id);
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              className="hidden md:inline-flex"
+                              variant="ghost"
+                              size="sm"
+                              disabled={isDeleting}
+                              onClick={() => {
+                                if (!window.confirm("Удалить эту операцию?"))
+                                  return;
+                                void onDelete(tx.id);
+                              }}
+                            >
+                              Удалить
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </div>
                   );
@@ -159,11 +308,18 @@ export function TransactionsList({
           ))}
         </div>
       )}
+      {bulkUpdateError ? (
+        <div className="px-4 py-3 text-sm text-rose-600 md:px-5">
+          {bulkUpdateError}
+        </div>
+      ) : null}
       {deleteError ? (
-        <div className="px-5 py-3 text-sm text-rose-600">{deleteError}</div>
+        <div className="px-4 py-3 text-sm text-rose-600 md:px-5">
+          {deleteError}
+        </div>
       ) : null}
       {!isPending && !isError ? (
-        <div className="px-5 py-3 text-center text-sm text-black/55">
+        <div className="px-4 py-3 text-center text-sm text-black/55 md:px-5">
           {isFetchingNextPage
             ? "Подгружаем…"
             : hasNextPage

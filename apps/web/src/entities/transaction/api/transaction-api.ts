@@ -3,6 +3,7 @@ import type {
   Transaction,
   TransactionsPage,
   TransactionType,
+  UpdateTransaction,
 } from "@moneyflow/shared";
 import { request } from "@/shared/api/http";
 
@@ -11,6 +12,7 @@ type TransactionsQuery = {
   to?: string;
   type?: TransactionType;
   categoryId?: string;
+  q?: string;
   limit?: number;
   cursor?: string;
 };
@@ -29,6 +31,11 @@ export const transactionApi = {
   createTransaction: (body: CreateTransaction) =>
     request<Transaction>("/transactions", {
       method: "POST",
+      body: JSON.stringify(body),
+    }),
+  updateTransaction: (id: string, body: UpdateTransaction) =>
+    request<Transaction>(`/transactions/${id}`, {
+      method: "PATCH",
       body: JSON.stringify(body),
     }),
   deleteTransaction: (id: string) =>

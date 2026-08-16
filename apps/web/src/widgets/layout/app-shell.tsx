@@ -77,7 +77,7 @@ export function AppShell() {
         <div className="absolute bottom-12 left-1/3 h-16 w-16 rounded-full border-2 border-black/20 bg-[#ffe8b8]" />
       </div>
 
-      <div className="relative mx-auto flex min-h-screen max-w-6xl flex-col gap-4 px-4 py-4 md:gap-6 md:px-8 md:py-6">
+      <div className="relative mx-auto flex min-h-screen max-w-6xl flex-col gap-4 px-2 py-4 md:gap-6 md:px-8 md:py-6">
         <header className="flex items-center justify-between gap-3 rounded-[28px] border-2 border-black/90 bg-[#fffdf5] px-4 py-3 shadow-[0_6px_0_rgba(0,0,0,0.85)] md:gap-4 md:px-5 md:py-4">
           <div className="min-w-0">
             <div className="font-display text-xl tracking-tight text-black md:text-2xl">

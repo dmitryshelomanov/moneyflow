@@ -1,56 +1,130 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Navigate } from "react-router-dom";
+import { TelegramAuthSchema, type TelegramAuth } from "@moneyflow/shared";
 import { sessionApi } from "@/entities/session/api/session-api";
 import { useAuth } from "@/features/auth/model/auth-context";
 import { Button } from "@/shared/ui/button";
 import { GlassCard } from "@/shared/ui/glass-card";
 
-declare global {
-  interface Window {
-    onTelegramAuth?: (user: Record<string, unknown>) => void;
-  }
+const submittedTelegramHashes = new Set<string>();
+
+function decodeBase64Url(value: string) {
+  const padded = value.replace(/-/g, "+").replace(/_/g, "/");
+  const pad =
+    padded.length % 4 === 0 ? "" : "=".repeat(4 - (padded.length % 4));
+  return atob(padded + pad);
+}
+
+function parseTelegramAuth(raw: unknown): TelegramAuth | null {
+  const parsed = TelegramAuthSchema.safeParse(raw);
+  return parsed.success ? parsed.data : null;
+}
+
+function parseTelegramAuthFromLocation(): TelegramAuth | null {
+  if (typeof window === "undefined") return null;
+
+  const stripPrefix = (raw: string) =>
+    raw.startsWith("?") || raw.startsWith("#") ? raw.slice(1) : raw;
+
+  const fromTgAuthResult = (raw: string) => {
+    const params = new URLSearchParams(stripPrefix(raw));
+    const encoded = params.get("tgAuthResult");
+    if (!encoded) return null;
+    try {
+      return parseTelegramAuth(JSON.parse(decodeBase64Url(encoded)));
+    } catch {
+      return null;
+    }
+  };
+
+  const fromFlatParams = (raw: string) => {
+    const params = new URLSearchParams(stripPrefix(raw));
+    const id = Number(params.get("id"));
+    const authDate = Number(params.get("auth_date"));
+    const firstName = params.get("first_name");
+    const hash = params.get("hash");
+    if (!firstName || !hash || Number.isNaN(id) || Number.isNaN(authDate)) {
+      return null;
+    }
+    return parseTelegramAuth({
+      id,
+      first_name: firstName,
+      last_name: params.get("last_name") ?? undefined,
+      username: params.get("username") ?? undefined,
+      photo_url: params.get("photo_url") ?? undefined,
+      auth_date: authDate,
+      hash,
+    });
+  };
+
+  return (
+    fromTgAuthResult(window.location.hash) ??
+    fromTgAuthResult(window.location.search) ??
+    fromFlatParams(window.location.search) ??
+    fromFlatParams(window.location.hash)
+  );
 }
 
 export function LoginPage() {
   const { user, loading, refresh } = useAuth();
   const [error, setError] = useState<string | null>(null);
-  const widgetRef = useRef<HTMLDivElement>(null);
   const jakeBg = `${import.meta.env.BASE_URL}theme/jake.png`;
   const finnBg = `${import.meta.env.BASE_URL}theme/finn.png`;
-  const botUsername = import.meta.env.VITE_TELEGRAM_BOT_USERNAME as
-    string | undefined;
+  const botId = import.meta.env.VITE_TELEGRAM_BOT_ID as string | undefined;
 
   const telegramAuthMutation = useMutation({
-    mutationFn: (payload: Record<string, unknown>) =>
-      sessionApi.telegramAuth(payload),
+    mutationFn: (payload: TelegramAuth) => sessionApi.telegramAuth(payload),
   });
+  const { mutateAsync: telegramAuth } = telegramAuthMutation;
   const devLoginMutation = useMutation({
     mutationFn: () => sessionApi.devLogin({ name: "Dev User" }),
   });
 
-  useEffect(() => {
-    window.onTelegramAuth = async (payload) => {
-      try {
-        await telegramAuthMutation.mutateAsync(payload);
-        await refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Ошибка входа");
-      }
-    };
+  const telegramAuthUrl = useMemo(() => {
+    if (!botId || typeof window === "undefined") return null;
+    const returnTo = `${window.location.origin}${window.location.pathname}`;
+    const url = new URL("https://oauth.telegram.org/auth");
+    url.searchParams.set("bot_id", botId);
+    url.searchParams.set("origin", window.location.origin);
+    url.searchParams.set("request_access", "write");
+    url.searchParams.set("return_to", returnTo);
+    return url.toString();
+  }, [botId]);
 
-    if (!botUsername || !widgetRef.current) return;
-    widgetRef.current.innerHTML = "";
-    const script = document.createElement("script");
-    script.src = "https://telegram.org/js/telegram-widget.js?22";
-    script.async = true;
-    script.setAttribute("data-telegram-login", botUsername);
-    script.setAttribute("data-size", "large");
-    script.setAttribute("data-radius", "16");
-    script.setAttribute("data-onauth", "onTelegramAuth(user)");
-    script.setAttribute("data-request-access", "write");
-    widgetRef.current.appendChild(script);
-  }, [botUsername, refresh, telegramAuthMutation]);
+  useEffect(() => {
+    const payload = parseTelegramAuthFromLocation();
+    if (!payload || submittedTelegramHashes.has(payload.hash)) return;
+    submittedTelegramHashes.add(payload.hash);
+    let cancelled = false;
+    let finished = false;
+    (async () => {
+      try {
+        await telegramAuth(payload);
+        if (!cancelled) {
+          await refresh();
+        }
+      } catch (err) {
+        submittedTelegramHashes.delete(payload.hash);
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Ошибка входа");
+        }
+      } finally {
+        finished = true;
+        if (!cancelled && typeof window !== "undefined") {
+          window.history.replaceState(
+            null,
+            document.title,
+            window.location.pathname,
+          );
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+      if (!finished) submittedTelegramHashes.delete(payload.hash);
+    };
+  }, [refresh, telegramAuth]);
 
   if (!loading && user) return <Navigate to="/" replace />;
 
@@ -79,12 +153,22 @@ export function LoginPage() {
             Личный учёт денег через Telegram и AI
           </p>
         </div>
-        <div ref={widgetRef} className="flex justify-center" />
-        {!botUsername && (
+        {telegramAuthUrl && (
+          <Button
+            className="w-full"
+            disabled={telegramAuthMutation.isPending}
+            onClick={() => {
+              window.location.assign(telegramAuthUrl);
+            }}
+          >
+            Войти через Telegram
+          </Button>
+        )}
+        {!botId && (
           <div className="space-y-3">
             <p className="text-sm text-black/60">
-              Dev-вход (без Telegram widget). В production задай
-              VITE_TELEGRAM_BOT_USERNAME.
+              Dev-вход (без Telegram widget). Для production задай
+              VITE_TELEGRAM_BOT_ID.
             </p>
             <Button
               className="w-full"

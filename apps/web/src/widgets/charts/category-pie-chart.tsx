@@ -23,6 +23,35 @@ const COLORS = [
 
 const RADIAN = Math.PI / 180;
 
+function darkenHexColor(hex: string, factor = 0.58) {
+  const normalized = hex.replace("#", "");
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return hex;
+  const r = Math.max(
+    0,
+    Math.min(
+      255,
+      Math.round(Number.parseInt(normalized.slice(0, 2), 16) * factor),
+    ),
+  );
+  const g = Math.max(
+    0,
+    Math.min(
+      255,
+      Math.round(Number.parseInt(normalized.slice(2, 4), 16) * factor),
+    ),
+  );
+  const b = Math.max(
+    0,
+    Math.min(
+      255,
+      Math.round(Number.parseInt(normalized.slice(4, 6), 16) * factor),
+    ),
+  );
+  return `#${r.toString(16).padStart(2, "0")}${g
+    .toString(16)
+    .padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+}
+
 export type CategorySlice = {
   categoryId?: string | null;
   name: string;
@@ -71,7 +100,7 @@ function IconLabel({
           <CategoryIcon
             name={slice.icon}
             className="h-3 w-3"
-            style={{ color: slice.color }}
+            style={{ color: darkenHexColor(slice.color) }}
             strokeWidth={2.25}
           />
         </div>
@@ -152,15 +181,15 @@ export function CategoryPieChart({
 
   if (slices.length === 0) {
     return (
-      <div className="flex h-48 items-center justify-center text-sm text-black/55 md:h-64">
+      <div className="flex h-56 items-center justify-center text-sm text-black/55 sm:h-64 md:h-72">
         {emptyLabel}
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <div className="relative mx-auto h-48 w-full max-w-[280px] overflow-hidden md:h-56 md:max-w-none">
+    <div className="space-y-4 md:space-y-5">
+      <div className="relative mx-auto h-56 w-full max-w-[360px] overflow-hidden sm:h-64 md:h-72 md:max-w-none">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
             <Pie
@@ -199,30 +228,31 @@ export function CategoryPieChart({
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <button
             type="button"
-            className="pointer-events-auto flex max-w-[46%] flex-col items-center rounded-full border-2 border-black/90 bg-[#fffdf5] px-3 py-2 text-center shadow-[0_3px_0_rgba(0,0,0,0.8)]"
+            className="pointer-events-auto flex max-w-[65%] flex-col items-center rounded-full border-2 border-black/90 bg-[#fffdf5] px-3 py-2 text-center shadow-[0_3px_0_rgba(0,0,0,0.8)] sm:max-w-[58%] sm:px-3.5 sm:py-2.5 md:max-w-[46%] md:px-3 md:py-2"
             onClick={() => setActiveIndex(null)}
             aria-label="Сбросить выбор"
           >
             {selected ? (
               <>
-                <div className="flex items-center gap-1.5 text-[11px] font-medium text-black/75">
+                <div className="flex items-center gap-1.5 text-xs font-medium text-black/75 md:text-[11px]">
                   <CategoryIcon
                     name={selected.icon}
                     className="h-3 w-3 shrink-0"
-                    style={{ color: selected.color }}
+                    style={{ color: darkenHexColor(selected.color) }}
+                    strokeWidth={2.3}
                   />
                   <span className="truncate">{selected.name}</span>
                 </div>
-                <div className="mt-0.5 font-display text-sm leading-tight text-black md:text-base">
+                <div className="mt-0.5 font-display text-sm leading-tight text-black sm:text-base md:text-base">
                   {formatMoney(selected.totalMinor, currency)}
                 </div>
               </>
             ) : (
               <>
-                <div className="text-[10px] uppercase tracking-[0.14em] text-black/55">
+                <div className="text-[11px] uppercase tracking-[0.14em] text-black/55 md:text-[10px]">
                   Итого
                 </div>
-                <div className="font-display text-sm leading-tight text-black md:text-lg">
+                <div className="font-display text-sm leading-tight text-black sm:text-base md:text-lg">
                   {formatMoney(totalMinor, currency)}
                 </div>
               </>
@@ -231,7 +261,7 @@ export function CategoryPieChart({
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-1.5 sm:grid-cols-[repeat(auto-fit,minmax(220px,1fr))] sm:gap-2">
         {slices.map((slice, index) => {
           const share =
             totalMinor > 0
@@ -250,27 +280,35 @@ export function CategoryPieChart({
                 })
               }
               className={cn(
-                "inline-flex min-w-[180px] max-w-full items-center gap-2 rounded-full border-2 border-black/70 bg-[#fff6be] px-3 py-1.5 text-left text-sm text-black/75 shadow-[0_3px_0_rgba(0,0,0,0.75)] transition hover:bg-[#ffef93]",
+                "inline-flex w-full min-w-0 items-center gap-1.5 rounded-full border-2 border-black/70 bg-[#fff6be] px-2.5 py-1 text-left text-xs text-black/75 shadow-[0_3px_0_rgba(0,0,0,0.75)] transition hover:bg-[#ffef93] sm:gap-2 sm:px-3 sm:py-1.5 sm:text-sm",
                 active && "border-black/90 bg-[#d8fb88]",
               )}
             >
               <span
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-black/10"
                 style={{
-                  backgroundColor: `${slice.color}1f`,
-                  color: slice.color,
+                  backgroundColor: `${slice.color}2b`,
+                  color: darkenHexColor(slice.color),
                 }}
               >
-                <CategoryIcon name={slice.icon} className="h-3.5 w-3.5" />
+                <CategoryIcon
+                  name={slice.icon}
+                  className="h-3.5 w-3.5"
+                  strokeWidth={2.35}
+                />
               </span>
-              <div className="flex min-w-0 items-center gap-2">
-                <span className="truncate font-medium text-black">
-                  {slice.name}
-                </span>
-                <span className="shrink-0 text-xs text-black/55">{share}%</span>
-                <span className="shrink-0 tabular-nums text-black">
+              <div className="min-w-0 flex-1">
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium leading-tight text-black">
+                    {slice.name}
+                  </span>
+                  <span className="shrink-0 text-[11px] text-black/55">
+                    {share}%
+                  </span>
+                </div>
+                <div className="mt-0.5 truncate text-[11px] tabular-nums text-black sm:text-xs">
                   {formatMoney(slice.totalMinor, currency)}
-                </span>
+                </div>
               </div>
             </button>
           );

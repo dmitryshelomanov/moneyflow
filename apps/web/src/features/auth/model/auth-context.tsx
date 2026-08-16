@@ -6,7 +6,9 @@ import { sessionKeys, useSessionQuery } from "@/entities/session/model/queries";
 type AuthCtx = {
   user: User | null;
   loading: boolean;
+  sessionError: string | null;
   refresh: () => Promise<void>;
+  retrySession: () => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -26,6 +28,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refresh = async () => {
     await meQuery.refetch();
   };
+  const retrySession = async () => {
+    await meQuery.refetch();
+  };
 
   const logout = async () => {
     await logoutMutation.mutateAsync();
@@ -33,9 +38,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const user: User | null = meQuery.data?.user ?? null;
   const loading = meQuery.isPending;
+  const sessionError =
+    meQuery.error instanceof Error
+      ? meQuery.error.message
+      : meQuery.isError
+        ? "Не удалось проверить сессию"
+        : null;
 
   return (
-    <Ctx.Provider value={{ user, loading, refresh, logout }}>
+    <Ctx.Provider
+      value={{ user, loading, sessionError, refresh, retrySession, logout }}
+    >
       {children}
     </Ctx.Provider>
   );

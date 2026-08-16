@@ -65,6 +65,22 @@ const PRESETS = [
     }),
   },
   {
+    id: "months24",
+    label: "2 года",
+    range: (_allTimeFrom: Date) => ({
+      from: startOfMonth(subMonths(startOfToday(), 23)),
+      to: startOfToday(),
+    }),
+  },
+  {
+    id: "months36",
+    label: "3 года",
+    range: (_allTimeFrom: Date) => ({
+      from: startOfMonth(subMonths(startOfToday(), 35)),
+      to: startOfToday(),
+    }),
+  },
+  {
     id: "all",
     label: "Всё время",
     range: (allTimeFrom: Date) => ({ from: allTimeFrom, to: startOfToday() }),
