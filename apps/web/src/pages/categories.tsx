@@ -25,6 +25,7 @@ import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
 import { Textarea } from "@/shared/ui/textarea";
 import { cn } from "@/shared/lib/cn";
+import { isCoarsePointer } from "@/shared/lib/pointer";
 
 export function CategoriesPage() {
   const queryClient = useQueryClient();
@@ -253,7 +254,7 @@ export function CategoriesPage() {
                 <Textarea
                   id="category-prompt"
                   className="mt-1"
-                  autoFocus
+                  autoFocus={!isCoarsePointer()}
                   placeholder="Например: аптека, лекарства, БАДы"
                   value={promptDraft}
                   onChange={(e) => setPromptDraft(e.target.value)}

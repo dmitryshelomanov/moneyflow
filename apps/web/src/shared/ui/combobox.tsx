@@ -1,6 +1,7 @@
 import * as React from "react";
 import { Check, ChevronDown, Search } from "lucide-react";
 import { cn } from "@/shared/lib/cn";
+import { isCoarsePointer } from "@/shared/lib/pointer";
 import { Popover, PopoverContent, PopoverTrigger } from "@/shared/ui/popover";
 
 export type ComboboxOption = {
@@ -79,6 +80,7 @@ export function Combobox({
         )}
         onOpenAutoFocus={(event) => {
           event.preventDefault();
+          if (isCoarsePointer()) return;
           inputRef.current?.focus();
         }}
       >
@@ -89,7 +91,7 @@ export function Combobox({
               ref={inputRef}
               value={search}
               placeholder={searchPlaceholder}
-              className="h-9 w-full rounded-xl border-2 border-black/90 bg-[#fffdf5] py-1.5 pl-9 pr-3 text-sm text-black outline-none placeholder:text-black/40 focus-visible:ring-2 focus-visible:ring-black/20"
+              className="h-9 w-full rounded-xl border-2 border-black/90 bg-[#fffdf5] py-1.5 pl-9 pr-3 text-base text-black outline-none placeholder:text-black/40 focus-visible:ring-2 focus-visible:ring-black/20 md:text-sm"
               onChange={(event) => setSearch(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Escape") {
