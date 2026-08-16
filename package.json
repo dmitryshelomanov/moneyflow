@@ -15,7 +15,11 @@
     "db:migrate": "npm run db:migrate -w @moneyflow/api",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "deploy": "bash scripts/deploy.sh",
+    "db:dump": "bash scripts/dump-db.sh",
+    "db:restore": "bash scripts/restore-db.sh",
+    "hook:install": "bash scripts/install-pre-commit-hook.sh"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
@@ -27,6 +31,6 @@
     "typescript-eslint": "^8.67.0"
   },
   "engines": {
-    "node": ">=20"
+    "node": "22.13.0"
   }
 }

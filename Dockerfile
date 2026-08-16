@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM node:20-bookworm AS builder
+FROM node:22.13.0-bookworm AS builder
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ \
@@ -18,15 +18,15 @@ RUN npm ci
 COPY . .
 
 ARG ACCESS_KEY
-ARG VITE_TELEGRAM_BOT_USERNAME=
+ARG VITE_TELEGRAM_BOT_ID=
 ENV ACCESS_KEY=$ACCESS_KEY
-ENV VITE_TELEGRAM_BOT_USERNAME=$VITE_TELEGRAM_BOT_USERNAME
+ENV VITE_TELEGRAM_BOT_ID=$VITE_TELEGRAM_BOT_ID
 ENV NODE_ENV=production
 
 RUN test -n "$ACCESS_KEY" || (echo "ACCESS_KEY build-arg is required" && exit 1)
 RUN npm run build
 
-FROM node:20-bookworm-slim AS runner
+FROM node:22.13.0-bookworm-slim AS runner
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates \
@@ -42,6 +42,7 @@ COPY --from=builder /app/package.json /app/package-lock.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/apps ./apps
 COPY --from=builder /app/packages ./packages
+COPY --from=builder /app/scripts ./scripts
 
 EXPOSE 3000
 
