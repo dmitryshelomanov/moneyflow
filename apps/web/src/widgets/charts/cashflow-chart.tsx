@@ -42,6 +42,10 @@ type CashflowChartProps = {
   from: string;
   to: string;
   granularity: Granularity;
+  onOpenTransactions?: (payload: {
+    bucketKey: string | null;
+    type: "income" | "expense";
+  }) => void;
 };
 
 type ChartRow = {
@@ -152,6 +156,7 @@ export function CashflowChart({
   from,
   to,
   granularity,
+  onOpenTransactions,
 }: CashflowChartProps) {
   const [mode, setMode] = useState<DisplayMode>("absolute");
   const [smoothTrend, setSmoothTrend] = useState(false);
@@ -233,6 +238,10 @@ export function CashflowChart({
     setSelectedKey((prev) => (prev === row.key ? null : row.key));
   };
 
+  const openTransactions = (type: "income" | "expense") => {
+    onOpenTransactions?.({ bucketKey: selectedKey, type });
+  };
+
   return (
     <div className="space-y-4 md:space-y-5">
       <div>
@@ -250,7 +259,11 @@ export function CashflowChart({
           {formatMoney(leftover, currency)}
         </div>
         <div className="mt-3 flex flex-wrap gap-x-3 gap-y-2 sm:gap-x-6">
-          <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="flex items-center gap-2 rounded-lg text-left transition-opacity hover:opacity-80"
+            onClick={() => openTransactions("expense")}
+          >
             <span className="font-medium text-[#8b6ad8]">
               {formatMoney(expenseMinor, currency)}
             </span>
@@ -258,8 +271,12 @@ export function CashflowChart({
               <ChevronRight className="h-3.5 w-3.5" />
             </span>
             <span className="text-sm text-black/60">Траты</span>
-          </div>
-          <div className="flex items-center gap-2">
+          </button>
+          <button
+            type="button"
+            className="flex items-center gap-2 rounded-lg text-left transition-opacity hover:opacity-80"
+            onClick={() => openTransactions("income")}
+          >
             <span className="font-medium text-[#1aa994]">
               {formatMoney(incomeMinor, currency)}
             </span>
@@ -267,7 +284,7 @@ export function CashflowChart({
               <ChevronRight className="h-3.5 w-3.5" />
             </span>
             <span className="text-sm text-black/60">Доходы</span>
-          </div>
+          </button>
         </div>
         <div className="mt-3 flex gap-1.5 overflow-x-auto pb-1 pr-1 sm:flex-wrap sm:gap-2">
           <Button

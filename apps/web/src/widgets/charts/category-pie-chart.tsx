@@ -22,6 +22,9 @@ const COLORS = [
 ];
 
 const RADIAN = Math.PI / 180;
+const CHART_TOP = 6;
+const LIST_PREVIEW = 6;
+const OTHER_SLICE_NAME = "Прочее";
 
 function darkenHexColor(hex: string, factor = 0.58) {
   const normalized = hex.replace("#", "");
@@ -59,20 +62,54 @@ export type CategorySlice = {
   totalMinor: number;
   icon: string;
   color: string;
+  isOther?: boolean;
+};
+
+type CategoryInput = {
+  categoryId?: string | null;
+  name: string;
+  value: number;
+  totalMinor: number;
+  icon?: string | null;
 };
 
 type CategoryPieChartProps = {
-  items: Array<{
-    categoryId?: string | null;
-    name: string;
-    value: number;
-    totalMinor: number;
-    icon?: string | null;
-  }>;
+  items: CategoryInput[];
   currency: string;
+  monthSpan: number;
   emptyLabel?: string;
   onSliceClick?: (slice: CategorySlice) => void;
 };
+
+type Selection = {
+  pieIndex: number | null;
+  listIndex: number | null;
+};
+
+const EMPTY_SELECTION: Selection = { pieIndex: null, listIndex: null };
+
+function toSlice(item: CategoryInput, color: string): CategorySlice {
+  return {
+    categoryId: item.categoryId ?? null,
+    name: item.name,
+    value: item.value,
+    totalMinor: item.totalMinor,
+    icon: resolveCategoryIconName({
+      icon: item.icon,
+      categoryName: item.name,
+    }),
+    color,
+  };
+}
+
+function colorForRank(index: number) {
+  return COLORS[Math.min(index, CHART_TOP) % COLORS.length];
+}
+
+function pieIndexForListItem(listIndex: number, otherPieIndex: number | null) {
+  if (listIndex < CHART_TOP) return listIndex;
+  return otherPieIndex;
+}
 
 function IconLabel({
   cx = 0,
@@ -137,47 +174,142 @@ function ActiveSlice(props: ActiveSliceProps) {
   );
 }
 
+function CategoryListRow({
+  slice,
+  share,
+  active,
+  currency,
+  monthSpan,
+  onClick,
+}: {
+  slice: CategorySlice;
+  share: number;
+  active: boolean;
+  currency: string;
+  monthSpan: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex w-full min-w-0 items-start gap-3 rounded-2xl border-2 border-black/70 bg-[#fff6be] px-3 py-2.5 text-left shadow-[0_3px_0_rgba(0,0,0,0.75)] transition hover:bg-[#ffef93]",
+        active && "border-black/90 bg-[#d8fb88]",
+      )}
+    >
+      <span
+        className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-black/10"
+        style={{
+          backgroundColor: `${slice.color}2b`,
+          color: darkenHexColor(slice.color),
+        }}
+      >
+        <CategoryIcon
+          name={slice.icon}
+          className="h-4 w-4"
+          strokeWidth={2.35}
+        />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-3">
+          <span className="break-words text-sm font-medium leading-snug text-black">
+            {slice.name}
+          </span>
+          <span className="shrink-0 pt-0.5 text-xs tabular-nums text-black/55">
+            {share}%
+          </span>
+        </div>
+        <div className="mt-1 text-sm font-semibold tabular-nums text-black">
+          {formatMoney(slice.totalMinor, currency)}
+        </div>
+        {monthSpan > 2 ? (
+          <div className="mt-0.5 text-xs tabular-nums text-black/55">
+            ≈ {formatMoney(Math.round(slice.totalMinor / monthSpan), currency)}
+            /мес
+          </div>
+        ) : null}
+      </div>
+    </button>
+  );
+}
+
 export function CategoryPieChart({
   items,
   currency,
+  monthSpan,
   emptyLabel = "Нет данных за период",
   onSliceClick,
 }: CategoryPieChartProps) {
-  const MAX_VISIBLE = 6;
-  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [selection, setSelection] = useState<Selection>(EMPTY_SELECTION);
+  const [listExpanded, setListExpanded] = useState(false);
+
+  const sorted = useMemo(
+    () => [...items].sort((a, b) => b.totalMinor - a.totalMinor),
+    [items],
+  );
+
+  const listItems = useMemo(
+    () => sorted.map((item, index) => toSlice(item, colorForRank(index))),
+    [sorted],
+  );
 
   const slices = useMemo<CategorySlice[]>(() => {
-    const sorted = [...items].sort((a, b) => b.totalMinor - a.totalMinor);
-    const visible = sorted.slice(0, MAX_VISIBLE);
-    const tail = sorted.slice(MAX_VISIBLE);
+    const top = listItems.slice(0, CHART_TOP);
+    const tail = listItems.slice(CHART_TOP);
     const tailTotal = tail.reduce((sum, row) => sum + row.totalMinor, 0);
-    const prepared = tailTotal
-      ? [
-          ...visible,
+    if (!tailTotal) return top;
+    return [
+      ...top,
+      {
+        ...toSlice(
           {
             categoryId: null,
-            name: "Прочее",
+            name: OTHER_SLICE_NAME,
             value: tailTotal / 100,
             totalMinor: tailTotal,
             icon: "Circle",
           },
-        ]
-      : visible;
-    return prepared.map((item, i) => ({
-      categoryId: item.categoryId ?? null,
-      name: item.name,
-      value: item.value,
-      totalMinor: item.totalMinor,
-      icon: resolveCategoryIconName({
-        icon: item.icon,
-        categoryName: item.name,
-      }),
-      color: COLORS[i % COLORS.length],
-    }));
-  }, [items]);
+          colorForRank(CHART_TOP),
+        ),
+        isOther: true,
+      },
+    ];
+  }, [listItems]);
 
-  const totalMinor = slices.reduce((sum, s) => sum + s.totalMinor, 0);
-  const selected = activeIndex != null ? slices[activeIndex] : null;
+  const totalMinor = slices.reduce((sum, slice) => sum + slice.totalMinor, 0);
+  const selected =
+    selection.pieIndex != null ? slices[selection.pieIndex] : null;
+  const otherPieIndex = slices.findIndex((slice) => slice.isOther);
+  const hiddenCount = Math.max(0, listItems.length - LIST_PREVIEW);
+  const visibleList = listExpanded
+    ? listItems
+    : listItems.slice(0, LIST_PREVIEW);
+
+  const selectPieSlice = (index: number) => {
+    setSelection((prev) => {
+      if (prev.pieIndex === index) return EMPTY_SELECTION;
+      return {
+        pieIndex: index,
+        listIndex: index < CHART_TOP ? index : null,
+      };
+    });
+  };
+
+  const selectListItem = (listIndex: number) => {
+    const slice = visibleList[listIndex];
+    setSelection((prev) => {
+      if (prev.listIndex === listIndex) return EMPTY_SELECTION;
+      return {
+        pieIndex: pieIndexForListItem(
+          listIndex,
+          otherPieIndex >= 0 ? otherPieIndex : null,
+        ),
+        listIndex,
+      };
+    });
+    if (slice?.categoryId) onSliceClick?.(slice);
+  };
 
   if (slices.length === 0) {
     return (
@@ -206,11 +338,9 @@ export function CategoryPieChart({
               label={(props) => <IconLabel {...props} slices={slices} />}
               labelLine={false}
               isAnimationActive={false}
-              activeIndex={activeIndex ?? undefined}
+              activeIndex={selection.pieIndex ?? undefined}
               activeShape={ActiveSlice}
-              onClick={(_slice, index) => {
-                setActiveIndex((prev) => (prev === index ? null : index));
-              }}
+              onClick={(_slice, index) => selectPieSlice(index)}
               style={{ cursor: "pointer", outline: "none" }}
             >
               {slices.map((slice) => (
@@ -227,7 +357,7 @@ export function CategoryPieChart({
           <button
             type="button"
             className="pointer-events-auto flex max-w-[65%] flex-col items-center rounded-full border-2 border-black/90 bg-[#fffdf5] px-3 py-2 text-center shadow-[0_3px_0_rgba(0,0,0,0.8)] sm:max-w-[58%] sm:px-3.5 sm:py-2.5 md:max-w-[46%] md:px-3 md:py-2"
-            onClick={() => setActiveIndex(null)}
+            onClick={() => setSelection(EMPTY_SELECTION)}
             aria-label="Сбросить выбор"
           >
             {selected ? (
@@ -259,58 +389,34 @@ export function CategoryPieChart({
         </div>
       </div>
 
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-1.5 sm:grid-cols-[repeat(auto-fit,minmax(220px,1fr))] sm:gap-2">
-        {slices.map((slice, index) => {
+      <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+        {visibleList.map((slice, listIndex) => {
           const share =
             totalMinor > 0
               ? Math.round((slice.totalMinor / totalMinor) * 100)
               : 0;
-          const active = activeIndex === index;
           return (
-            <button
-              key={slice.name}
-              type="button"
-              onClick={() =>
-                setActiveIndex((prev) => {
-                  const next = prev === index ? null : index;
-                  if (next != null && onSliceClick) onSliceClick(slices[next]);
-                  return next;
-                })
-              }
-              className={cn(
-                "inline-flex w-full min-w-0 items-center gap-1.5 rounded-full border-2 border-black/70 bg-[#fff6be] px-2.5 py-1 text-left text-xs text-black/75 shadow-[0_3px_0_rgba(0,0,0,0.75)] transition hover:bg-[#ffef93] sm:gap-2 sm:px-3 sm:py-1.5 sm:text-sm",
-                active && "border-black/90 bg-[#d8fb88]",
-              )}
-            >
-              <span
-                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-black/10"
-                style={{
-                  backgroundColor: `${slice.color}2b`,
-                  color: darkenHexColor(slice.color),
-                }}
-              >
-                <CategoryIcon
-                  name={slice.icon}
-                  className="h-3.5 w-3.5"
-                  strokeWidth={2.35}
-                />
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="flex min-w-0 items-center gap-1.5">
-                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium leading-tight text-black">
-                    {slice.name}
-                  </span>
-                  <span className="shrink-0 text-[11px] text-black/55">
-                    {share}%
-                  </span>
-                </div>
-                <div className="mt-0.5 truncate text-[11px] tabular-nums text-black sm:text-xs">
-                  {formatMoney(slice.totalMinor, currency)}
-                </div>
-              </div>
-            </button>
+            <CategoryListRow
+              key={`${slice.categoryId ?? slice.name}-${listIndex}`}
+              slice={slice}
+              share={share}
+              active={selection.listIndex === listIndex}
+              currency={currency}
+              monthSpan={monthSpan}
+              onClick={() => selectListItem(listIndex)}
+            />
           );
         })}
+
+        {hiddenCount > 0 ? (
+          <button
+            type="button"
+            onClick={() => setListExpanded((prev) => !prev)}
+            className="w-full rounded-2xl border-2 border-dashed border-black/40 bg-transparent px-3 py-2.5 text-sm font-medium text-black/70 transition hover:border-black/60 hover:bg-[#fff6be]/50 hover:text-black md:col-span-2"
+          >
+            {listExpanded ? "Скрыть" : `Показать еще · ${hiddenCount}`}
+          </button>
+        ) : null}
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 import { format, parseISO } from "date-fns";
 import { ru } from "date-fns/locale";
-import { parseYmd } from "@/shared/lib/date";
+import { formatYmd, parseYmd } from "@/shared/lib/date";
 
 export type Granularity = "day" | "week" | "month" | "year";
 
@@ -76,6 +76,46 @@ export function formatChartFullLabel(
     return `${format(date, "d MMM", { locale: ru })} — ${format(end, "d MMM", { locale: ru })}`;
   }
   return format(date, "d MMMM yyyy", { locale: ru });
+}
+
+/** Inclusive YMD range for a chart bucket; optionally clamped to [clampFrom, clampTo]. */
+export function bucketToYmdRange(
+  key: string,
+  granularity: Granularity,
+  clampFrom?: string,
+  clampTo?: string,
+): { from: string; to: string } | null {
+  const date = parseBucketDate(key);
+  if (!date) return null;
+  const g = inferGranularity(key, granularity);
+
+  let from: string;
+  let to: string;
+
+  if (g === "year") {
+    const y = date.getFullYear();
+    from = `${y}-01-01`;
+    to = `${y}-12-31`;
+  } else if (g === "month") {
+    const y = date.getFullYear();
+    const m = date.getMonth();
+    from = formatYmd(new Date(y, m, 1));
+    to = formatYmd(new Date(y, m + 1, 0));
+  } else if (g === "week") {
+    from = formatYmd(date);
+    const end = new Date(date);
+    end.setDate(end.getDate() + 6);
+    to = formatYmd(end);
+  } else {
+    from = formatYmd(date);
+    to = from;
+  }
+
+  if (clampFrom && from < clampFrom) from = clampFrom;
+  if (clampTo && to > clampTo) to = clampTo;
+  if (from > to) return null;
+
+  return { from, to };
 }
 
 export function fillKeys(

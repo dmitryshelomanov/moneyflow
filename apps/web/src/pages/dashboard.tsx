@@ -11,6 +11,7 @@ import { useAiSavings } from "@/features/ai-savings/model/use-ai-savings";
 import { SavingsAdvicePanel } from "@/features/ai-savings/ui/savings-advice-panel";
 import { useAiPulse } from "@/features/ai-pulse/model/use-ai-pulse";
 import { FinancePulsePanel } from "@/features/ai-pulse/ui/finance-pulse-panel";
+import { bucketToYmdRange } from "@/shared/lib/chart";
 import { Button } from "@/shared/ui/button";
 import { GlassCard } from "@/shared/ui/glass-card";
 import { Input } from "@/shared/ui/input";
@@ -41,6 +42,24 @@ export function DashboardPage() {
     a.download = `moneyflow-${state.from}-${state.to}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const openTransactions = (query: {
+    from?: string;
+    to?: string;
+    type: "income" | "expense";
+    categoryId?: string;
+  }) => {
+    const params = new URLSearchParams({
+      from: query.from ?? state.from,
+      to: query.to ?? state.to,
+      type: query.type,
+    });
+    if (query.categoryId) params.set("categoryId", query.categoryId);
+    if (state.selectedAccountId) {
+      params.set("accountId", state.selectedAccountId);
+    }
+    navigate(`/transactions?${params.toString()}`);
   };
 
   return (
@@ -232,7 +251,7 @@ export function DashboardPage() {
       <GlassCard>
         <TotalMoneyChart
           series={state.balanceSeries}
-          currency={state.summary?.currency ?? "RUB"}
+          currency={currency}
           balance={state.summary?.balance ?? 0}
           averageExpensePerMonthMinor={state.averageExpensePerMonthMinor}
           from={state.from}
@@ -241,38 +260,64 @@ export function DashboardPage() {
         />
       </GlassCard>
 
-      <div className="grid gap-4 md:grid-cols-5">
-        <GlassCard className="order-2 md:order-1 md:col-span-3">
-          <CashflowChart
-            series={state.series}
-            currency={state.summary?.currency ?? "RUB"}
-            periodIncome={state.summary?.periodIncome ?? 0}
-            periodExpense={state.summary?.periodExpense ?? 0}
-            from={state.from}
-            to={state.to}
-            granularity={state.granularity}
+      <GlassCard>
+        <CashflowChart
+          series={state.series}
+          currency={currency}
+          periodIncome={state.summary?.periodIncome ?? 0}
+          periodExpense={state.summary?.periodExpense ?? 0}
+          from={state.from}
+          to={state.to}
+          granularity={state.granularity}
+          onOpenTransactions={({ bucketKey, type }) => {
+            const range = bucketKey
+              ? bucketToYmdRange(
+                  bucketKey,
+                  state.granularity,
+                  state.from,
+                  state.to,
+                )
+              : { from: state.from, to: state.to };
+            if (!range) return;
+            openTransactions({ ...range, type });
+          }}
+        />
+      </GlassCard>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <GlassCard>
+          <h2 className="mb-4 font-display text-lg text-black md:text-xl">
+            Доходы по категориям
+          </h2>
+          <CategoryPieChart
+            items={state.incomeCats}
+            currency={currency}
+            monthSpan={state.monthSpan}
+            emptyLabel="Нет доходов за период"
+            onSliceClick={(slice) => {
+              if (!slice.categoryId) return;
+              openTransactions({
+                type: "income",
+                categoryId: slice.categoryId,
+              });
+            }}
           />
         </GlassCard>
-
-        <GlassCard className="order-1 md:order-2 md:col-span-2">
+        <GlassCard>
           <h2 className="mb-4 font-display text-lg text-black md:text-xl">
             Расходы по категориям
           </h2>
           <CategoryPieChart
             items={state.expenseCats}
-            currency={state.summary?.currency ?? "RUB"}
+            currency={currency}
+            monthSpan={state.monthSpan}
             emptyLabel="Нет расходов за период"
             onSliceClick={(slice) => {
               if (!slice.categoryId) return;
-              const params = new URLSearchParams();
-              params.set("from", state.from);
-              params.set("to", state.to);
-              params.set("type", "expense");
-              params.set("categoryId", slice.categoryId);
-              if (state.selectedAccountId) {
-                params.set("accountId", state.selectedAccountId);
-              }
-              navigate(`/transactions?${params.toString()}`);
+              openTransactions({
+                type: "expense",
+                categoryId: slice.categoryId,
+              });
             }}
           />
         </GlassCard>
@@ -291,29 +336,6 @@ export function DashboardPage() {
           />
         </GlassCard>
       </div>
-
-      <GlassCard>
-        <h2 className="mb-4 font-display text-lg text-black md:text-xl">
-          Доходы по категориям
-        </h2>
-        <CategoryPieChart
-          items={state.incomeCats}
-          currency={state.summary?.currency ?? "RUB"}
-          emptyLabel="Нет доходов за период"
-          onSliceClick={(slice) => {
-            if (!slice.categoryId) return;
-            const params = new URLSearchParams();
-            params.set("from", state.from);
-            params.set("to", state.to);
-            params.set("type", "income");
-            params.set("categoryId", slice.categoryId);
-            if (state.selectedAccountId) {
-              params.set("accountId", state.selectedAccountId);
-            }
-            navigate(`/transactions?${params.toString()}`);
-          }}
-        />
-      </GlassCard>
 
       <GlassCard className="space-y-3">
         <Label>Быстрая запись</Label>
