@@ -1,3 +1,4 @@
+import { accountApi } from "@/entities/account/api/account-api";
 import { categoryApi } from "@/entities/category/api/category-api";
 import { sessionApi } from "@/entities/session/api/session-api";
 import { settingsApi } from "@/entities/settings/api/settings-api";
@@ -9,6 +10,7 @@ import { importCsvAiApi } from "@/features/settings-import/api/import-csv-ai-api
 export const api = {
   ...sessionApi,
   ...settingsApi,
+  ...accountApi,
   ...categoryApi,
   ...transactionApi,
   ...statsApi,

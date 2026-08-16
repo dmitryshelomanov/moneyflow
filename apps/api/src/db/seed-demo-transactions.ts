@@ -1,7 +1,11 @@
 import { randomBytes } from "node:crypto";
 import { db, sqlite } from "./client.js";
-import { categories, transactions } from "./schema.js";
+import { accounts, categories, transactions } from "./schema.js";
 import { seedBaseCategories } from "./seed-categories.js";
+
+const ACCOUNT_MAIN = "main";
+const ACCOUNT_CARD = "card";
+const ACCOUNT_CASH = "cash";
 
 function newId() {
   return randomBytes(12).toString("hex");
@@ -10,6 +14,30 @@ function newId() {
 function toMinor(rubles: number) {
   return Math.round(rubles * 100);
 }
+
+const DEMO_ACCOUNTS = [
+  {
+    id: ACCOUNT_MAIN,
+    name: "Основной",
+    matchHint: "наличные,кэш,cash,основной,main",
+    openingBalance: toMinor(50_000),
+    isDefault: true,
+  },
+  {
+    id: ACCOUNT_CARD,
+    name: "Карта",
+    matchHint: "карта,card,кредитная,дебетовая",
+    openingBalance: toMinor(15_000),
+    isDefault: false,
+  },
+  {
+    id: ACCOUNT_CASH,
+    name: "Наличные",
+    matchHint: "наличные,кэш,cash",
+    openingBalance: toMinor(5_000),
+    isDefault: false,
+  },
+] as const;
 
 function isoLocal(d: Date) {
   const y = d.getFullYear();
@@ -32,6 +60,11 @@ function randInt(min: number, max: number) {
   return min + Math.floor(Math.random() * (max - min + 1));
 }
 
+/** Prefer card for everyday spend; cash for small cash-like expenses. */
+function pickCardOrCash(cashWeight = 0.3): string {
+  return Math.random() < cashWeight ? ACCOUNT_CASH : ACCOUNT_CARD;
+}
+
 type Cat = { id: string; name: string };
 
 type Draft = {
@@ -40,6 +73,7 @@ type Draft = {
   amount: number;
   occurredAt: Date;
   note: string;
+  accountId: string;
 };
 
 function buildDrafts(monthsBack: number): Draft[] {
@@ -54,13 +88,14 @@ function buildDrafts(monthsBack: number): Draft[] {
     const dim = daysInMonth(year, month);
     const lastDay = m === 0 ? Math.min(now.getDate(), dim) : dim;
 
-    // Зарплата
+    // Зарплата → Основной
     drafts.push({
       type: "income",
       categoryName: "Зарплата",
       amount: 100_000,
       occurredAt: new Date(year, month, Math.min(5, lastDay), 10, 15),
       note: "Зарплата",
+      accountId: ACCOUNT_MAIN,
     });
     if (lastDay >= 20) {
       drafts.push({
@@ -69,10 +104,11 @@ function buildDrafts(monthsBack: number): Draft[] {
         amount: 45_000,
         occurredAt: new Date(year, month, 20, 10, 20),
         note: "Аванс",
+        accountId: ACCOUNT_MAIN,
       });
     }
 
-    // Иногда прочий доход
+    // Иногда прочий доход → Карта
     if (Math.random() < 0.45 && lastDay >= 12) {
       drafts.push({
         type: "income",
@@ -86,10 +122,11 @@ function buildDrafts(monthsBack: number): Draft[] {
           randInt(0, 50),
         ),
         note: pick(["Фриланс", "Возврат", "Кэшбек", "Подарок"]),
+        accountId: ACCOUNT_CARD,
       });
     }
 
-    // Фикс. расходы
+    // Фикс. расходы → Основной
     const fixed: Array<{
       name: string;
       amount: number;
@@ -114,11 +151,12 @@ function buildDrafts(monthsBack: number): Draft[] {
           amount: f.amount,
           occurredAt: new Date(year, month, f.day, 11, randInt(0, 40)),
           note: f.note,
+          accountId: ACCOUNT_MAIN,
         });
       }
     }
 
-    // Продукты ~8–12 раз
+    // Продукты → Карта / иногда Наличные
     for (let i = 0; i < randInt(8, 12); i++) {
       const day = randInt(1, lastDay);
       drafts.push({
@@ -127,10 +165,11 @@ function buildDrafts(monthsBack: number): Draft[] {
         amount: randInt(600, 4_800),
         occurredAt: new Date(year, month, day, randInt(10, 20), randInt(0, 59)),
         note: pick(["Пятёрочка", "Лента", "ВкусВилл", "Магнит", "Перекрёсток"]),
+        accountId: pickCardOrCash(0.2),
       });
     }
 
-    // Фастфуд / развлечения / такси
+    // Фастфуд / развлечения / такси / транспорт
     for (let i = 0; i < randInt(4, 8); i++) {
       drafts.push({
         type: "expense",
@@ -144,9 +183,11 @@ function buildDrafts(monthsBack: number): Draft[] {
           randInt(0, 59),
         ),
         note: pick(["Додо", "Вкусно и точка", "Шаурма", "Суши"]),
+        accountId: pickCardOrCash(0.55),
       });
     }
     for (let i = 0; i < randInt(3, 6); i++) {
+      const note = pick(["Кофе", "Кино", "Подписка", "Кафе"]);
       drafts.push({
         type: "expense",
         categoryName: "Развлечения",
@@ -158,7 +199,8 @@ function buildDrafts(monthsBack: number): Draft[] {
           randInt(9, 21),
           randInt(0, 59),
         ),
-        note: pick(["Кофе", "Кино", "Подписка", "Кафе"]),
+        note,
+        accountId: note === "Кофе" ? pickCardOrCash(0.6) : ACCOUNT_CARD,
       });
     }
     for (let i = 0; i < randInt(3, 7); i++) {
@@ -174,9 +216,11 @@ function buildDrafts(monthsBack: number): Draft[] {
           randInt(0, 59),
         ),
         note: "Яндекс Go",
+        accountId: ACCOUNT_CARD,
       });
     }
     for (let i = 0; i < randInt(2, 5); i++) {
+      const note = pick(["Метро", "Бензин", "Автобус"]);
       drafts.push({
         type: "expense",
         categoryName: "Транспорт",
@@ -188,11 +232,13 @@ function buildDrafts(monthsBack: number): Draft[] {
           randInt(8, 20),
           randInt(0, 59),
         ),
-        note: pick(["Метро", "Бензин", "Автобус"]),
+        note,
+        accountId: note === "Бензин" ? ACCOUNT_CARD : pickCardOrCash(0.7),
       });
     }
 
-    // Маркетплейсы / одежда / красота / аптеки / здоровье / животные
+    // Маркетплейсы / одежда / красота / аптеки / здоровье / животные → Карта
+    // Переводы/кредиты → Основной
     if (Math.random() < 0.8) {
       drafts.push({
         type: "expense",
@@ -206,6 +252,7 @@ function buildDrafts(monthsBack: number): Draft[] {
           randInt(0, 40),
         ),
         note: pick(["Ozon", "Wildberries"]),
+        accountId: ACCOUNT_CARD,
       });
     }
     if (Math.random() < 0.45) {
@@ -221,6 +268,7 @@ function buildDrafts(monthsBack: number): Draft[] {
           randInt(0, 40),
         ),
         note: pick(["Uniqlo", "Zara", "WB одежда"]),
+        accountId: ACCOUNT_CARD,
       });
     }
     if (Math.random() < 0.4) {
@@ -236,6 +284,7 @@ function buildDrafts(monthsBack: number): Draft[] {
           randInt(0, 40),
         ),
         note: pick(["Стрижка", "Косметика"]),
+        accountId: ACCOUNT_CARD,
       });
     }
     if (Math.random() < 0.55) {
@@ -251,6 +300,7 @@ function buildDrafts(monthsBack: number): Draft[] {
           randInt(0, 40),
         ),
         note: "Аптека",
+        accountId: pickCardOrCash(0.25),
       });
     }
     if (Math.random() < 0.25) {
@@ -266,6 +316,7 @@ function buildDrafts(monthsBack: number): Draft[] {
           randInt(0, 40),
         ),
         note: pick(["Анализы", "Стоматолог", "Врач"]),
+        accountId: ACCOUNT_CARD,
       });
     }
     if (Math.random() < 0.5) {
@@ -281,6 +332,7 @@ function buildDrafts(monthsBack: number): Draft[] {
           randInt(0, 40),
         ),
         note: pick(["Корм", "Ветклиника"]),
+        accountId: ACCOUNT_CARD,
       });
     }
     if (Math.random() < 0.35) {
@@ -296,6 +348,7 @@ function buildDrafts(monthsBack: number): Draft[] {
           randInt(0, 40),
         ),
         note: pick(["Рассрочка", "Перевод"]),
+        accountId: ACCOUNT_MAIN,
       });
     }
   }
@@ -303,17 +356,45 @@ function buildDrafts(monthsBack: number): Draft[] {
   return drafts.filter((d) => d.occurredAt.getTime() <= Date.now());
 }
 
-export function seedDemoTransactions(monthsBack = 6) {
+function resetDemoAccounts() {
+  sqlite.exec("DELETE FROM transactions;");
+  try {
+    sqlite.exec("DELETE FROM advice_cache;");
+  } catch {
+    // table may not exist on older DBs
+  }
+  sqlite.exec("DELETE FROM accounts;");
+
+  const now = new Date().toISOString();
+  for (const a of DEMO_ACCOUNTS) {
+    db.insert(accounts)
+      .values({
+        id: a.id,
+        name: a.name,
+        matchHint: a.matchHint,
+        openingBalance: a.openingBalance,
+        isDefault: a.isDefault,
+        createdAt: now,
+      })
+      .run();
+  }
+}
+
+export function seedDemoTransactions(monthsBack = 12) {
   seedBaseCategories();
+  resetDemoAccounts();
 
   const cats = db.select().from(categories).all() as Cat[];
   const byName = new Map(cats.map((c) => [c.name, c]));
 
-  sqlite.exec("DELETE FROM transactions;");
-
   const drafts = buildDrafts(monthsBack);
   const now = new Date().toISOString();
   let inserted = 0;
+  const byAccount: Record<string, number> = {
+    [ACCOUNT_MAIN]: 0,
+    [ACCOUNT_CARD]: 0,
+    [ACCOUNT_CASH]: 0,
+  };
 
   for (const draft of drafts) {
     const cat = byName.get(draft.categoryName);
@@ -326,6 +407,7 @@ export function seedDemoTransactions(monthsBack = 6) {
         type: draft.type,
         amount: toMinor(draft.amount),
         currency: "RUB",
+        accountId: draft.accountId,
         categoryId: cat.id,
         occurredAt: isoLocal(draft.occurredAt),
         note: draft.note,
@@ -335,15 +417,21 @@ export function seedDemoTransactions(monthsBack = 6) {
       })
       .run();
     inserted += 1;
+    byAccount[draft.accountId] = (byAccount[draft.accountId] ?? 0) + 1;
   }
 
-  return { inserted, monthsBack };
+  return { inserted, monthsBack, byAccount };
 }
 
 const isDirectRun = process.argv[1]?.includes("seed-demo-transactions");
 if (isDirectRun) {
-  const result = seedDemoTransactions(6);
+  const parsed = Number.parseInt(process.argv[2] ?? "12", 10);
+  const monthsBack = Number.isFinite(parsed) && parsed > 0 ? parsed : 12;
+  const result = seedDemoTransactions(monthsBack);
   console.log(
     `Seeded ${result.inserted} transactions for last ${result.monthsBack} months`,
+  );
+  console.log(
+    `Accounts: main=${result.byAccount[ACCOUNT_MAIN]}, card=${result.byAccount[ACCOUNT_CARD]}, cash=${result.byAccount[ACCOUNT_CASH]}`,
   );
 }

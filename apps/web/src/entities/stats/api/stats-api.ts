@@ -23,28 +23,58 @@ export type HeatmapCell = {
 };
 
 export const statsApi = {
-  summary: (from?: string, to?: string) => {
+  summary: (from?: string, to?: string, accountId?: string) => {
     const params = new URLSearchParams();
     if (from) params.set("from", from);
     if (to) params.set("to", to);
+    if (accountId) params.set("accountId", accountId);
     return request<StatsSummary>(`/stats/summary?${params}`);
   },
-  statsMeta: () =>
-    request<{ firstTransactionAt: string | null }>("/stats/meta"),
-  timeseries: (from: string, to: string, granularity = "day") => {
+  statsMeta: (accountId?: string) => {
+    const params = new URLSearchParams();
+    if (accountId) params.set("accountId", accountId);
+    return request<{ firstTransactionAt: string | null }>(
+      `/stats/meta?${params}`,
+    );
+  },
+  timeseries: (
+    from: string,
+    to: string,
+    granularity = "day",
+    accountId?: string,
+  ) => {
     const params = new URLSearchParams({ from, to, granularity });
+    if (accountId) params.set("accountId", accountId);
     return request<TimeseriesPoint[]>(`/stats/timeseries?${params}`);
   },
-  balanceSeries: (from: string, to: string, granularity = "month") => {
+  balanceSeries: (
+    from: string,
+    to: string,
+    granularity = "month",
+    accountId?: string,
+  ) => {
     const params = new URLSearchParams({ from, to, granularity });
+    if (accountId) params.set("accountId", accountId);
     return request<BalancePoint[]>(`/stats/balance-series?${params}`);
   },
-  categoryPareto: (from: string, to: string, type: TransactionType) => {
+  categoryPareto: (
+    from: string,
+    to: string,
+    type: TransactionType,
+    accountId?: string,
+  ) => {
     const params = new URLSearchParams({ from, to, type });
+    if (accountId) params.set("accountId", accountId);
     return request<ParetoPoint[]>(`/stats/category-pareto?${params}`);
   },
-  spendingHeatmap: (from: string, to: string, type: TransactionType) => {
+  spendingHeatmap: (
+    from: string,
+    to: string,
+    type: TransactionType,
+    accountId?: string,
+  ) => {
     const params = new URLSearchParams({ from, to, type });
+    if (accountId) params.set("accountId", accountId);
     return request<HeatmapCell[]>(`/stats/spending-heatmap?${params}`);
   },
 };

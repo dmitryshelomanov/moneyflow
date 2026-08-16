@@ -22,11 +22,33 @@ export type CreateCategory = z.infer<typeof CreateCategorySchema>;
 export const UpdateCategorySchema = CreateCategorySchema.partial();
 export type UpdateCategory = z.infer<typeof UpdateCategorySchema>;
 
+export const AccountSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1),
+  matchHint: z.string().nullable(),
+  openingBalance: z.number().int(),
+  isDefault: z.boolean(),
+  createdAt: z.string(),
+});
+export type Account = z.infer<typeof AccountSchema>;
+
+export const CreateAccountSchema = z.object({
+  name: z.string().min(1).max(80),
+  matchHint: z.string().max(200).nullable().optional(),
+  openingBalance: z.number().optional().default(0),
+  openingBalanceInMinor: z.boolean().optional(),
+});
+export type CreateAccount = z.infer<typeof CreateAccountSchema>;
+
+export const UpdateAccountSchema = CreateAccountSchema.partial();
+export type UpdateAccount = z.infer<typeof UpdateAccountSchema>;
+
 export const TransactionSchema = z.object({
   id: z.string(),
   type: TransactionTypeSchema,
   amount: z.number().int(),
   currency: z.string(),
+  accountId: z.string().nullable(),
   categoryId: z.string().nullable(),
   occurredAt: z.string(),
   note: z.string().nullable(),
@@ -47,6 +69,7 @@ export const CreateTransactionSchema = z.object({
   type: TransactionTypeSchema,
   amount: z.number().positive(),
   currency: z.string().min(1).optional(),
+  accountId: z.string().nullable().optional(),
   categoryId: z.string().nullable().optional(),
   occurredAt: z.string().optional(),
   note: z.string().max(500).nullable().optional(),
@@ -61,6 +84,7 @@ export const UpdateTransactionSchema = z.object({
   type: TransactionTypeSchema.optional(),
   amount: z.number().positive().optional(),
   currency: z.string().min(1).optional(),
+  accountId: z.string().nullable().optional(),
   categoryId: z.string().nullable().optional(),
   occurredAt: z.string().optional(),
   note: z.string().max(500).nullable().optional(),
@@ -92,6 +116,8 @@ export const ParseResultSchema = z.object({
   currency: z.string().min(1).optional(),
   occurredAt: z.string(),
   note: z.string(),
+  accountHint: z.string().max(160).nullable().optional(),
+  accountConfidence: z.number().min(0).max(1).optional(),
   categoryName: z.string().nullable(),
   createCategory: z
     .object({
@@ -134,6 +160,7 @@ export const ParseRequestSchema = z
     text: z.string().max(10_000).optional(),
     imageBase64: z.string().max(5_000_000).optional(),
     imageMime: z.string().max(120).optional(),
+    accountId: z.string().nullable().optional(),
     save: z.boolean().optional().default(true),
   })
   .refine((value) => Boolean(value.text || value.imageBase64), {
@@ -168,12 +195,14 @@ const StatsGranularitySchema = z.enum(["day", "week", "month", "year"]);
 export const StatsRangeQuerySchema = z.object({
   from: DateInputSchema,
   to: DateInputSchema,
+  accountId: z.string().min(1).optional(),
 });
 export type StatsRangeQuery = z.infer<typeof StatsRangeQuerySchema>;
 
 export const StatsSummaryQuerySchema = z.object({
   from: DateInputSchema.optional(),
   to: DateInputSchema.optional(),
+  accountId: z.string().min(1).optional(),
 });
 export type StatsSummaryQuery = z.infer<typeof StatsSummaryQuerySchema>;
 
@@ -207,6 +236,7 @@ export const TransactionsListQuerySchema = z.object({
   from: DateInputSchema.optional(),
   to: DateInputSchema.optional(),
   type: TransactionTypeSchema.optional(),
+  accountId: z.string().min(1).optional(),
   categoryId: z.string().min(1).optional(),
   q: z
     .string()

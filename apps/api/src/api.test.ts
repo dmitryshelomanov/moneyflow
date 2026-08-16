@@ -15,7 +15,13 @@ import { env } from "./env.js";
 import { createApp } from "./server/createApp.js";
 import { applyParseBatch } from "./services/apply-parse.js";
 import * as aiService from "./services/ai.js";
-import { listTransactionsPage } from "./services/money.js";
+import {
+  createAccount,
+  deleteAccount,
+  getBalance,
+  getDefaultAccount,
+  listTransactionsPage,
+} from "./services/money.js";
 import { resetRateLimitStore } from "./server/middleware/rate-limit.js";
 
 const app = createApp();
@@ -628,5 +634,100 @@ CREATE TABLE settings (
       ),
     ).toThrow();
     expect(listTransactionsPage({ limit: 100 }).items.length).toBe(0);
+  });
+
+  it("migrate backfills null transaction account_id to default account", () => {
+    const defaultAccount = getDefaultAccount();
+    const now = new Date().toISOString();
+    sqlite
+      .prepare(
+        `INSERT INTO transactions
+          (id, type, amount, currency, account_id, category_id, occurred_at, note, source, raw_text, created_at)
+         VALUES (?, 'expense', 500, 'RUB', NULL, NULL, ?, 'legacy', 'web', NULL, ?)`,
+      )
+      .run("tx-legacy-null-account", now, now);
+
+    migrate();
+
+    const row = sqlite
+      .prepare("SELECT account_id FROM transactions WHERE id = ?")
+      .get("tx-legacy-null-account") as { account_id: string | null };
+    expect(row.account_id).toBe(defaultAccount.id);
+  });
+
+  it("migrate does not re-copy settings opening onto default account", () => {
+    const defaultAccount = getDefaultAccount();
+    sqlite
+      .prepare("UPDATE settings SET opening_balance = ? WHERE id = 1")
+      .run(99_00);
+    sqlite
+      .prepare("UPDATE accounts SET opening_balance = 0 WHERE id = ?")
+      .run(defaultAccount.id);
+
+    migrate();
+
+    const row = sqlite
+      .prepare("SELECT opening_balance FROM accounts WHERE id = ?")
+      .get(defaultAccount.id) as { opening_balance: number };
+    expect(row.opening_balance).toBe(0);
+  });
+
+  it("deleteAccount reassigns transactions to default account", () => {
+    const defaultAccount = getDefaultAccount();
+    const other = createAccount({
+      name: "Card",
+      matchHint: "карта",
+      openingBalance: 10,
+    });
+    const now = new Date().toISOString();
+    sqlite
+      .prepare(
+        `INSERT INTO transactions
+          (id, type, amount, currency, account_id, category_id, occurred_at, note, source, raw_text, created_at)
+         VALUES (?, 'expense', 250, 'RUB', ?, NULL, ?, 'card spend', 'web', NULL, ?)`,
+      )
+      .run("tx-on-card", other.id, now, now);
+
+    expect(deleteAccount(other.id)).toBe(true);
+
+    const row = sqlite
+      .prepare("SELECT account_id FROM transactions WHERE id = ?")
+      .get("tx-on-card") as { account_id: string | null };
+    expect(row.account_id).toBe(defaultAccount.id);
+    expect(
+      sqlite.prepare("SELECT id FROM accounts WHERE id = ?").get(other.id),
+    ).toBeUndefined();
+  });
+
+  it("getBalance uses per-account opening and filters by accountId", () => {
+    const defaultAccount = getDefaultAccount();
+    sqlite
+      .prepare("UPDATE accounts SET opening_balance = ? WHERE id = ?")
+      .run(100_00, defaultAccount.id);
+
+    const card = createAccount({
+      name: "Balance Card",
+      matchHint: null,
+      openingBalance: 50,
+    });
+    const now = new Date().toISOString();
+    sqlite
+      .prepare(
+        `INSERT INTO transactions
+          (id, type, amount, currency, account_id, category_id, occurred_at, note, source, raw_text, created_at)
+         VALUES (?, 'expense', 2000, 'RUB', ?, NULL, ?, 'main spend', 'web', NULL, ?)`,
+      )
+      .run("tx-bal-main", defaultAccount.id, now, now);
+    sqlite
+      .prepare(
+        `INSERT INTO transactions
+          (id, type, amount, currency, account_id, category_id, occurred_at, note, source, raw_text, created_at)
+         VALUES (?, 'income', 1000, 'RUB', ?, NULL, ?, 'card income', 'web', NULL, ?)`,
+      )
+      .run("tx-bal-card", card.id, now, now);
+
+    expect(getBalance(now, defaultAccount.id)).toBe(100_00 - 2000);
+    expect(getBalance(now, card.id)).toBe(50_00 + 1000);
+    expect(getBalance(now)).toBe(100_00 + 50_00 - 2000 + 1000);
   });
 });

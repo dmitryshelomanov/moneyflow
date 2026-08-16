@@ -22,9 +22,14 @@ export function TransactionsPage() {
       : "Ошибка загрузки операций";
   const isDeleting = mutations.deleteMutation.isPending;
   const isBulkUpdating = mutations.bulkUpdateMutation.isPending;
+  const isUpdatingAccount = mutations.updateAccountMutation.isPending;
   const bulkUpdateError =
     mutations.bulkUpdateMutation.error instanceof Error
       ? mutations.bulkUpdateMutation.error.message
+      : null;
+  const updateAccountError =
+    mutations.updateAccountMutation.error instanceof Error
+      ? mutations.updateAccountMutation.error.message
       : null;
   const hasNextPage = Boolean(queries.transactionsQuery.hasNextPage);
   const [amountError, setAmountError] = useState<string | null>(null);
@@ -41,6 +46,7 @@ export function TransactionsPage() {
       await mutations.createMutation.mutateAsync({
         type: state.form.type,
         amount,
+        accountId: state.form.accountId || null,
         categoryId: state.form.categoryId || null,
         occurredAt: new Date(state.form.occurredAt).toISOString(),
         note: state.form.note || null,
@@ -76,6 +82,14 @@ export function TransactionsPage() {
     }
   };
 
+  const onChangeAccount = async (id: string, accountId: string) => {
+    try {
+      await mutations.updateAccountMutation.mutateAsync({ id, accountId });
+    } catch {
+      // Error is rendered by mutation state in the list.
+    }
+  };
+
   return (
     <div className="space-y-6">
       <TransactionsFilters
@@ -83,17 +97,21 @@ export function TransactionsPage() {
         from={state.from}
         to={state.to}
         type={state.type}
+        accountId={state.accountId}
         categoryId={state.categoryId}
+        accounts={state.accounts}
         categories={state.categories}
         allTimeFrom={state.allTimeFrom}
         onQChange={actions.setQ}
         onPeriodChange={onPeriodChange}
         onTypeChange={actions.setType}
+        onAccountChange={actions.setAccountId}
         onCategoryChange={actions.setCategoryId}
       />
 
       <CreateTransactionForm
         form={state.form}
+        accounts={state.accounts}
         categories={state.categories}
         isSaving={mutations.createMutation.isPending}
         error={amountError ?? createError}
@@ -107,7 +125,9 @@ export function TransactionsPage() {
       <TransactionsList
         groups={state.dayGroups}
         categories={state.categories}
+        accounts={state.accounts}
         catMap={state.catMap}
+        accountMap={state.accountMap}
         hasActiveSearch={state.hasActiveSearch}
         isPending={queries.transactionsQuery.isPending}
         isError={queries.transactionsQuery.isError}
@@ -123,6 +143,8 @@ export function TransactionsPage() {
         selectedCount={state.selectedCount}
         isBulkUpdating={isBulkUpdating}
         bulkUpdateError={bulkUpdateError}
+        isUpdatingAccount={isUpdatingAccount}
+        updateAccountError={updateAccountError}
         isFetchingNextPage={queries.transactionsQuery.isFetchingNextPage}
         hasNextPage={hasNextPage}
         sentinelRef={refs.sentinelRef}
@@ -131,6 +153,7 @@ export function TransactionsPage() {
         onToggleSelected={actions.toggleSelected}
         onClearSelected={actions.clearSelected}
         onApplyBulkCategory={onApplyBulkCategory}
+        onChangeAccount={onChangeAccount}
       />
     </div>
   );

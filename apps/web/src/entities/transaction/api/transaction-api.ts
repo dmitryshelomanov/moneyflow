@@ -11,6 +11,7 @@ type TransactionsQuery = {
   from?: string;
   to?: string;
   type?: TransactionType;
+  accountId?: string;
   categoryId?: string;
   q?: string;
   limit?: number;

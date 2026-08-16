@@ -9,6 +9,7 @@ import { AppError } from "../errors.js";
 import { newId } from "../auth.js";
 import { db } from "../db/client.js";
 import { transactions } from "../db/schema.js";
+import { getAccountById, getDefaultAccount } from "./accounts.js";
 import { buildTransactionDateRangeConditions } from "./transaction-date-filters.js";
 import { getCategoryById } from "./categories.js";
 import { getSettings } from "./settings.js";
@@ -19,6 +20,7 @@ type TransactionFilters = {
   from?: string;
   to?: string;
   type?: TransactionType;
+  accountId?: string;
   categoryId?: string;
   q?: string;
 };
@@ -61,6 +63,9 @@ function buildTransactionsFilters(filters: TransactionFilters) {
     filters.to,
   );
   if (filters.type) conditions.push(eq(transactions.type, filters.type));
+  if (filters.accountId) {
+    conditions.push(eq(transactions.accountId, filters.accountId));
+  }
   if (filters.categoryId) {
     conditions.push(eq(transactions.categoryId, filters.categoryId));
   }
@@ -79,6 +84,15 @@ function validateCategoryForTransaction(categoryId: string | null | undefined) {
   if (!category) {
     throw new AppError(400, "Invalid categoryId");
   }
+}
+
+function resolveAccountId(accountId: string | null | undefined): string {
+  if (!accountId) return getDefaultAccount().id;
+  const account = getAccountById(accountId);
+  if (!account) {
+    throw new AppError(400, "Invalid accountId");
+  }
+  return account.id;
 }
 
 function clampPageLimit(limit?: number) {
@@ -117,6 +131,7 @@ function decodeTransactionsCursor(cursor: string): TransactionsCursor {
 
 export function createTransaction(input: CreateTransaction) {
   const parsed = CreateTransactionSchema.parse(input);
+  const accountId = resolveAccountId(parsed.accountId);
   validateCategoryForTransaction(parsed.categoryId);
   const s = getSettings();
   const row = {
@@ -124,6 +139,7 @@ export function createTransaction(input: CreateTransaction) {
     type: parsed.type,
     amount: resolveAmount(parsed.amount, parsed.amountInMinor),
     currency: parsed.currency ?? s.currency,
+    accountId,
     categoryId: parsed.categoryId ?? null,
     occurredAt: parsed.occurredAt ?? nowIso(),
     note: parsed.note ?? null,
@@ -140,6 +156,10 @@ export function updateTransaction(id: string, input: UpdateTransaction) {
   if (!existing) return null;
 
   const nextType = input.type ?? existing.type;
+  const nextAccountId =
+    input.accountId === undefined
+      ? (existing.accountId ?? getDefaultAccount().id)
+      : resolveAccountId(input.accountId);
   const nextCategoryId =
     input.categoryId === undefined ? existing.categoryId : input.categoryId;
   validateCategoryForTransaction(nextCategoryId);
@@ -151,6 +171,7 @@ export function updateTransaction(id: string, input: UpdateTransaction) {
         ? existing.amount
         : resolveAmount(input.amount, input.amountInMinor),
     currency: input.currency ?? existing.currency,
+    accountId: nextAccountId,
     categoryId: nextCategoryId,
     occurredAt: input.occurredAt ?? existing.occurredAt,
     note: input.note === undefined ? existing.note : input.note,
@@ -247,6 +268,7 @@ export function listTransactionsForStats(filters: TransactionFilters) {
       amount: transactions.amount,
       occurredAt: transactions.occurredAt,
       categoryId: transactions.categoryId,
+      accountId: transactions.accountId,
     })
     .from(transactions)
     .where(conditions.length ? and(...conditions) : undefined)

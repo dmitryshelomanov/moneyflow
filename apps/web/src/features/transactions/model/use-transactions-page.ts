@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { Category, Transaction, TransactionType } from "@moneyflow/shared";
+import type {
+  Account,
+  Category,
+  Transaction,
+  TransactionType,
+} from "@moneyflow/shared";
 import { useSearchParams } from "react-router-dom";
+import {
+  accountKeys,
+  useAccountsQuery,
+} from "@/entities/account/model/queries";
 import {
   categoryKeys,
   useCategoriesQuery,
@@ -26,6 +35,7 @@ type TransactionForm = {
   amount: string;
   note: string;
   occurredAt: string;
+  accountId: string;
   categoryId: string;
 };
 
@@ -41,9 +51,10 @@ type PagingState = {
   isPending: boolean;
 };
 
-type BulkCategoryUpdateInput = {
-  categoryId: string | null;
+type BulkUpdateInput = {
   selectedIds: string[];
+  categoryId?: string | null;
+  accountId?: string;
 };
 
 const ISO_DATE_LENGTH = 10;
@@ -112,11 +123,13 @@ export function useTransactionsPage() {
   const fromParam = searchParams.get("from");
   const toParam = searchParams.get("to");
   const typeParam = searchParams.get("type");
+  const accountIdParam = searchParams.get("accountId");
   const categoryIdParam = searchParams.get("categoryId");
   const qParam = searchParams.get("q");
   const [type, setType] = useState<"" | TransactionType>(
     parseTransactionType(typeParam),
   );
+  const [accountId, setAccountId] = useState(accountIdParam ?? "");
   const [categoryId, setCategoryId] = useState(categoryIdParam ?? "");
   const [q, setQ] = useState(normalizeSearchQuery(qParam));
   const debouncedQ = useDebouncedValue(q, 300, true);
@@ -125,6 +138,7 @@ export function useTransactionsPage() {
     amount: "",
     note: "",
     occurredAt: new Date().toISOString().slice(0, 10),
+    accountId: "",
     categoryId: "",
   });
   const [selectionMode, setSelectionMode] = useState(false);
@@ -136,10 +150,12 @@ export function useTransactionsPage() {
       setPeriod(resolveInitialPeriod({ fromParam, toParam, defaults }));
     }
     setType(parseTransactionType(typeParam));
+    setAccountId(accountIdParam ?? "");
     setCategoryId(categoryIdParam ?? "");
     setQ(normalizeSearchQuery(qParam));
   }, [
     categoryIdParam,
+    accountIdParam,
     defaults,
     fromParam,
     qParam,
@@ -151,11 +167,13 @@ export function useTransactionsPage() {
   const { fromIso, toIso } = toIsoRange(from, to);
 
   const categoriesQuery = useCategoriesQuery();
+  const accountsQuery = useAccountsQuery();
   const statsMetaQuery = useStatsMetaQuery();
   const transactionsQuery = useTransactionsInfiniteQuery({
     fromIso,
     toIso,
     type,
+    accountId,
     categoryId,
     q: debouncedQ,
   });
@@ -164,9 +182,13 @@ export function useTransactionsPage() {
     async (includeCategories = false) => {
       await queryClient.invalidateQueries({ queryKey: transactionKeys.root });
       await queryClient.invalidateQueries({ queryKey: statsKeys.meta });
+      await queryClient.invalidateQueries({
+        queryKey: statsKeys.dashboardRoot,
+      });
       if (includeCategories) {
         await queryClient.invalidateQueries({ queryKey: categoryKeys.all });
       }
+      await queryClient.invalidateQueries({ queryKey: accountKeys.all });
     },
     [queryClient],
   );
@@ -181,12 +203,15 @@ export function useTransactionsPage() {
   const bulkUpdateMutation = useMutation({
     mutationFn: async ({
       categoryId,
+      accountId,
       selectedIds,
-    }: BulkCategoryUpdateInput) => {
+    }: BulkUpdateInput) => {
+      const patch =
+        accountId !== undefined
+          ? { accountId }
+          : { categoryId: categoryId ?? null };
       const results = await Promise.allSettled(
-        selectedIds.map((id) =>
-          transactionApi.updateTransaction(id, { categoryId }),
-        ),
+        selectedIds.map((id) => transactionApi.updateTransaction(id, patch)),
       );
       const updated = results.filter(
         (result) => result.status === "fulfilled",
@@ -201,6 +226,14 @@ export function useTransactionsPage() {
       setSelectedIds([]);
       setSelectionMode(false);
     },
+    onSettled: async () => {
+      await invalidateAfterMutation();
+    },
+  });
+
+  const updateAccountMutation = useMutation({
+    mutationFn: ({ id, accountId }: { id: string; accountId: string }) =>
+      transactionApi.updateTransaction(id, { accountId }),
     onSettled: async () => {
       await invalidateAfterMutation();
     },
@@ -248,10 +281,21 @@ export function useTransactionsPage() {
     );
   }, [items]);
 
+  useEffect(() => {
+    if (form.accountId) return;
+    const defaultAccount = accountsQuery.data?.find(
+      (account) => account.isDefault,
+    );
+    if (!defaultAccount) return;
+    setForm((prev) => ({ ...prev, accountId: defaultAccount.id }));
+  }, [accountsQuery.data, form.accountId]);
+
   const categories: Category[] = categoriesQuery.data ?? [];
+  const accounts: Account[] = accountsQuery.data ?? [];
   const allTimeFrom =
     statsMetaQuery.data?.firstTransactionAt?.slice(0, 10) ?? null;
   const catMap = Object.fromEntries(categories.map((c) => [c.id, c]));
+  const accountMap = Object.fromEntries(accounts.map((a) => [a.id, a]));
 
   const dayGroups = useMemo(() => {
     return groupTransactionsByDay(items);
@@ -278,9 +322,12 @@ export function useTransactionsPage() {
       from,
       to,
       type,
+      accountId,
       categoryId,
       form,
+      accounts,
       categories,
+      accountMap,
       allTimeFrom,
       dayGroups,
       catMap,
@@ -300,12 +347,14 @@ export function useTransactionsPage() {
     mutations: {
       createMutation,
       bulkUpdateMutation,
+      updateAccountMutation,
       deleteMutation,
     },
     actions: {
       setQ,
       setPeriod,
       setType,
+      setAccountId,
       setCategoryId,
       setForm,
       toggleSelectionMode: () =>

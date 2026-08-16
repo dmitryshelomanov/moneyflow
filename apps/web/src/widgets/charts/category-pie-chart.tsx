@@ -208,10 +208,8 @@ export function CategoryPieChart({
               isAnimationActive={false}
               activeIndex={activeIndex ?? undefined}
               activeShape={ActiveSlice}
-              onClick={(slice, index) => {
+              onClick={(_slice, index) => {
                 setActiveIndex((prev) => (prev === index ? null : index));
-                const payload = slice as CategorySlice;
-                if (payload && onSliceClick) onSliceClick(payload);
               }}
               style={{ cursor: "pointer", outline: "none" }}
             >

@@ -3,7 +3,7 @@ import {
   type UpdateSettings,
   toMinorUnits,
 } from "@moneyflow/shared";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { settings, transactions } from "../db/schema.js";
 
@@ -44,12 +44,13 @@ export function updateSettings(input: UpdateSettings): Settings {
   return getSettings();
 }
 
-export function getStatsMeta() {
+export function getStatsMeta(accountId?: string) {
   const row = db
     .select({
       firstTransactionAt: sql<string | null>`min(${transactions.occurredAt})`,
     })
     .from(transactions)
+    .where(accountId ? eq(transactions.accountId, accountId) : undefined)
     .get();
   return {
     firstTransactionAt: row?.firstTransactionAt ?? null,

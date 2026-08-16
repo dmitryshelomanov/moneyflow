@@ -2,7 +2,7 @@ import { useState } from "react";
 import { format } from "date-fns";
 import { ru } from "date-fns/locale";
 import { CalendarIcon, ChevronDown, ChevronUp } from "lucide-react";
-import type { Category, TransactionType } from "@moneyflow/shared";
+import type { Account, Category, TransactionType } from "@moneyflow/shared";
 import { cn } from "@/shared/lib/cn";
 import { formatYmd, parseYmd } from "@/shared/lib/date";
 import { Button } from "@/shared/ui/button";
@@ -24,6 +24,7 @@ type TransactionForm = {
   amount: string;
   note: string;
   occurredAt: string;
+  accountId: string;
   categoryId: string;
 };
 
@@ -34,6 +35,7 @@ function parseTransactionType(value: string): TransactionType | null {
 
 type CreateTransactionFormProps = {
   form: TransactionForm;
+  accounts: Account[];
   categories: Category[];
   isSaving: boolean;
   error: string | null;
@@ -43,6 +45,7 @@ type CreateTransactionFormProps = {
 
 export function CreateTransactionForm({
   form,
+  accounts,
   categories,
   isSaving,
   error,
@@ -54,6 +57,7 @@ export function CreateTransactionForm({
     { value: "none", label: "Без категории" },
     ...categories.map((c) => ({ value: c.id, label: c.name })),
   ];
+  const accountOptions = accounts.map((a) => ({ value: a.id, label: a.name }));
 
   return (
     <GlassCard className="space-y-3">
@@ -72,7 +76,7 @@ export function CreateTransactionForm({
         )}
       </Button>
       <div className={cn("space-y-3", !isExpandedMobile && "hidden md:block")}>
-        <div className="grid gap-3 md:grid-cols-5">
+        <div className="grid gap-3 md:grid-cols-6">
           <Select
             value={form.type}
             onValueChange={(value) => {
@@ -118,6 +122,12 @@ export function CreateTransactionForm({
               />
             </PopoverContent>
           </Popover>
+          <Combobox
+            value={form.accountId || ""}
+            onValueChange={(value) => onChange({ ...form, accountId: value })}
+            options={accountOptions}
+            placeholder="Счет"
+          />
           <Combobox
             value={form.categoryId || "none"}
             onValueChange={(value) =>

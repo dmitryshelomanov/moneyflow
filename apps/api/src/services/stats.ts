@@ -6,6 +6,7 @@ import {
 import { and, eq, lte, sql } from "drizzle-orm";
 import { db } from "../db/client.js";
 import { categories, transactions } from "../db/schema.js";
+import { getAccountById, getTotalOpeningBalance } from "./accounts.js";
 import { buildTransactionDateRangeConditions } from "./transaction-date-filters.js";
 import { listTransactionsForStats } from "./transactions.js";
 import { getSettings } from "./settings.js";
@@ -135,27 +136,52 @@ function weekdayFromDate(date: Date): Weekday {
   return (day === 0 ? 6 : day - 1) as Weekday;
 }
 
-export function getBalance(atIso?: string): number {
-  const s = getSettings();
+function withOptionalAccountFilter(
+  conditions: ReturnType<typeof buildTransactionDateRangeConditions>,
+  accountId?: string,
+) {
+  if (accountId) {
+    conditions.push(eq(transactions.accountId, accountId));
+  }
+  return conditions;
+}
+
+export function getBalance(atIso?: string, accountId?: string): number {
   const at = atIso ?? nowIso();
+  const where = accountId
+    ? and(
+        lte(transactions.occurredAt, at),
+        eq(transactions.accountId, accountId),
+      )
+    : lte(transactions.occurredAt, at);
   const rows = db
     .select({
       type: transactions.type,
       total: sql<number>`coalesce(sum(${transactions.amount}), 0)`,
     })
     .from(transactions)
-    .where(lte(transactions.occurredAt, at))
+    .where(where)
     .groupBy(transactions.type)
     .all();
 
   const { income, expense } = parseTypeTotals(rows);
-  return s.openingBalance + income - expense;
+  const opening = accountId
+    ? (getAccountById(accountId)?.openingBalance ?? 0)
+    : getTotalOpeningBalance();
+  return opening + income - expense;
 }
 
-export function getSummary(from?: string, to?: string): StatsSummary {
+export function getSummary(
+  from?: string,
+  to?: string,
+  accountId?: string,
+): StatsSummary {
   const s = getSettings();
-  const balance = getBalance(to ?? nowIso());
-  const conditions = buildTransactionDateRangeConditions(from, to);
+  const balance = getBalance(to ?? nowIso(), accountId);
+  const conditions = withOptionalAccountFilter(
+    buildTransactionDateRangeConditions(from, to),
+    accountId,
+  );
 
   const periodRows = db
     .select({
@@ -203,8 +229,9 @@ export function getTimeseries(
   from: string,
   to: string,
   granularity: Granularity = "day",
+  accountId?: string,
 ): TimeseriesPoint[] {
-  const rows = listTransactionsForStats({ from, to });
+  const rows = listTransactionsForStats({ from, to, accountId });
   const map = new Map<string, { income: number; expense: number }>();
 
   for (const row of rows) {
@@ -225,13 +252,14 @@ export function getBalanceSeries(
   from: string,
   to: string,
   granularity: Granularity = "month",
+  accountId?: string,
 ): BalancePoint[] {
   const before = new Date(from);
   before.setMilliseconds(before.getMilliseconds() - 1);
-  let running = getBalance(before.toISOString());
+  let running = getBalance(before.toISOString(), accountId);
 
   const nets = new Map<string, number>();
-  for (const row of listTransactionsForStats({ from, to })) {
+  for (const row of listTransactionsForStats({ from, to, accountId })) {
     const key = bucketKey(row.occurredAt, granularity);
     const delta = row.type === "income" ? row.amount : -row.amount;
     nets.set(key, (nets.get(key) ?? 0) + delta);
@@ -247,8 +275,12 @@ export function getCategoryPareto(
   from: string,
   to: string,
   type: TransactionType = "expense",
+  accountId?: string,
 ): ParetoPoint[] {
-  const conditions = buildTransactionDateRangeConditions(from, to);
+  const conditions = withOptionalAccountFilter(
+    buildTransactionDateRangeConditions(from, to),
+    accountId,
+  );
   conditions.push(eq(transactions.type, type));
 
   const byCat = db
@@ -291,8 +323,9 @@ export function getSpendingHeatmap(
   from: string,
   to: string,
   type: TransactionType = "expense",
+  accountId?: string,
 ): HeatmapCell[] {
-  const rows = listTransactionsForStats({ from, to, type });
+  const rows = listTransactionsForStats({ from, to, type, accountId });
   const map = new Map<string, HeatmapCell>();
 
   for (let weekday = 0; weekday < 7; weekday += 1) {

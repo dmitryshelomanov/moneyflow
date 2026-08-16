@@ -6,6 +6,7 @@ type ListParams = {
   fromIso: string;
   toIso: string;
   type: "" | TransactionType;
+  accountId: string;
   categoryId: string;
   q: string;
 };
@@ -14,6 +15,7 @@ type NormalizedListParams = {
   fromIso: string;
   toIso: string;
   type?: TransactionType;
+  accountId?: string;
   categoryId?: string;
   q?: string;
 };
@@ -23,6 +25,7 @@ function normalizeListParams(params: ListParams): NormalizedListParams {
     fromIso: params.fromIso,
     toIso: params.toIso,
     type: params.type || undefined,
+    accountId: params.accountId || undefined,
     categoryId: params.categoryId || undefined,
     q: params.q.trim() || undefined,
   };
@@ -38,6 +41,7 @@ export function useTransactionsInfiniteQuery({
   fromIso,
   toIso,
   type,
+  accountId,
   categoryId,
   q,
 }: ListParams) {
@@ -45,6 +49,7 @@ export function useTransactionsInfiniteQuery({
     fromIso,
     toIso,
     type,
+    accountId,
     categoryId,
     q,
   });
@@ -54,6 +59,7 @@ export function useTransactionsInfiniteQuery({
       fromIso,
       toIso,
       type,
+      accountId,
       categoryId,
       q,
     }),
@@ -63,6 +69,7 @@ export function useTransactionsInfiniteQuery({
         from: normalizedParams.fromIso,
         to: normalizedParams.toIso,
         type: normalizedParams.type,
+        accountId: normalizedParams.accountId,
         categoryId: normalizedParams.categoryId,
         q: normalizedParams.q,
         cursor: pageParam,

@@ -14,7 +14,7 @@ export function registerParseRoutes(router: Hono<{ Variables: ApiVariables }>) {
 
     const validated = validateBody(c, ParseRequestSchema, body);
     if (!validated.ok) return validated.response;
-    const { text, imageBase64, imageMime, save } = validated.data;
+    const { text, imageBase64, imageMime, accountId, save } = validated.data;
 
     const batch = await parseSmart({ text, imageBase64, imageMime });
     if (!save) {
@@ -28,6 +28,7 @@ export function registerParseRoutes(router: Hono<{ Variables: ApiVariables }>) {
     const result = applyParseBatch(batch, {
       source: "web",
       rawText: text ?? "[image]",
+      preferredAccountId: accountId,
     });
     return c.json({
       kind: result.kind,
@@ -35,6 +36,8 @@ export function registerParseRoutes(router: Hono<{ Variables: ApiVariables }>) {
       transactions: result.transactions,
       parse: result.parse,
       parses: result.parses,
+      accountResolution: result.accountResolution,
+      accountResolutions: result.accountResolutions,
       balance: result.balance,
       settings: result.settings,
       balanceFormatted: formatMoney(result.balance, result.settings.currency),

@@ -7,6 +7,7 @@ import {
 import { contentLengthLimitMiddleware } from "../server/middleware/content-length-limit.js";
 import { sessionAuthMiddleware } from "../server/middleware/session-auth.js";
 import { registerAdviceRoutes } from "./modules/advice.js";
+import { registerAccountRoutes } from "./modules/accounts.js";
 import { registerPublicAuthRoutes } from "./modules/auth.js";
 import { registerCategoryRoutes } from "./modules/categories.js";
 import { registerImportCsvAiRoutes } from "./modules/import-csv-ai.js";
@@ -30,6 +31,7 @@ privateApi.use("*", async (c, next) => {
 publicApi.use("/auth/*", authRateLimitMiddleware);
 registerPublicAuthRoutes(publicApi);
 registerSettingsRoutes(privateApi);
+registerAccountRoutes(privateApi);
 registerCategoryRoutes(privateApi);
 registerTransactionRoutes(privateApi);
 registerStatsRoutes(privateApi);

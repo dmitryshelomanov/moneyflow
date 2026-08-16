@@ -17,11 +17,25 @@ export const categories = sqliteTable("categories", {
   createdAt: text("created_at").notNull(),
 });
 
+export const accounts = sqliteTable("accounts", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  matchHint: text("match_hint"),
+  openingBalance: integer("opening_balance").notNull().default(0),
+  isDefault: integer("is_default", { mode: "boolean" })
+    .notNull()
+    .default(false),
+  createdAt: text("created_at").notNull(),
+});
+
 export const transactions = sqliteTable("transactions", {
   id: text("id").primaryKey(),
   type: text("type", { enum: ["expense", "income"] }).notNull(),
   amount: integer("amount").notNull(),
   currency: text("currency").notNull(),
+  accountId: text("account_id").references(() => accounts.id, {
+    onDelete: "set null",
+  }),
   categoryId: text("category_id").references(() => categories.id, {
     onDelete: "set null",
   }),
@@ -46,5 +60,6 @@ export const adviceCache = sqliteTable("advice_cache", {
 
 export type SettingsRow = typeof settings.$inferSelect;
 export type CategoryRow = typeof categories.$inferSelect;
+export type AccountRow = typeof accounts.$inferSelect;
 export type TransactionRow = typeof transactions.$inferSelect;
 export type AdviceCacheRow = typeof adviceCache.$inferSelect;

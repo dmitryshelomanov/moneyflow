@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fromMinorUnits } from "@moneyflow/shared";
+import { useAccountsQuery } from "@/entities/account/model/queries";
 import { statsApi } from "@/entities/stats/api/stats-api";
 import { statsKeys } from "@/entities/stats/model/queries";
 import { transactionKeys } from "@/entities/transaction/model/queries";
@@ -12,8 +13,11 @@ import { toIsoRange } from "@/shared/lib/date";
 export function useDashboard() {
   const queryClient = useQueryClient();
   const { period, setPeriod } = usePeriod();
+  const accountsQuery = useAccountsQuery();
   const { from, to } = period;
   const [quickText, setQuickText] = useState("");
+  const [quickAccountId, setQuickAccountId] = useState("");
+  const [selectedAccountId, setSelectedAccountId] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [longRangeGranularity, setLongRangeGranularity] =
     useState<Extract<Granularity, "month" | "year">>("year");
@@ -38,12 +42,21 @@ export function useDashboard() {
       setLongRangeGranularity("year");
     }
   }, [isLongRange]);
+  useEffect(() => {
+    if (quickAccountId) return;
+    const defaultAccount = accountsQuery.data?.find(
+      (account) => account.isDefault,
+    );
+    if (!defaultAccount) return;
+    setQuickAccountId(defaultAccount.id);
+  }, [accountsQuery.data, quickAccountId]);
 
   const dashboardQuery = useQuery({
     queryKey: statsKeys.dashboard(
       fromIso,
       toIso,
       `${granularity}:${balanceGranularity}`,
+      selectedAccountId || undefined,
     ),
     queryFn: async () => {
       const [
@@ -54,12 +67,32 @@ export function useDashboard() {
         expensePareto,
         expenseHeatmap,
       ] = await Promise.all([
-        statsApi.summary(fromIso, toIso),
-        statsApi.timeseries(fromIso, toIso, granularity),
-        statsApi.balanceSeries(fromIso, toIso, balanceGranularity),
-        statsApi.statsMeta(),
-        statsApi.categoryPareto(fromIso, toIso, "expense"),
-        statsApi.spendingHeatmap(fromIso, toIso, "expense"),
+        statsApi.summary(fromIso, toIso, selectedAccountId || undefined),
+        statsApi.timeseries(
+          fromIso,
+          toIso,
+          granularity,
+          selectedAccountId || undefined,
+        ),
+        statsApi.balanceSeries(
+          fromIso,
+          toIso,
+          balanceGranularity,
+          selectedAccountId || undefined,
+        ),
+        statsApi.statsMeta(selectedAccountId || undefined),
+        statsApi.categoryPareto(
+          fromIso,
+          toIso,
+          "expense",
+          selectedAccountId || undefined,
+        ),
+        statsApi.spendingHeatmap(
+          fromIso,
+          toIso,
+          "expense",
+          selectedAccountId || undefined,
+        ),
       ]);
       return {
         summary,
@@ -73,7 +106,12 @@ export function useDashboard() {
   });
 
   const parseMutation = useMutation({
-    mutationFn: () => quickParseApi.parse({ text: quickText, save: true }),
+    mutationFn: () =>
+      quickParseApi.parse({
+        text: quickText,
+        save: true,
+        accountId: quickAccountId || undefined,
+      }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: statsKeys.dashboardRoot,
@@ -126,6 +164,9 @@ export function useDashboard() {
       from,
       to,
       quickText,
+      quickAccountId,
+      selectedAccountId,
+      accounts: accountsQuery.data ?? [],
       message,
       granularity,
       balanceGranularity,
@@ -151,6 +192,8 @@ export function useDashboard() {
     actions: {
       setPeriod,
       setQuickText,
+      setQuickAccountId,
+      setSelectedAccountId,
       setMessage,
       setLongRangeGranularity,
     },

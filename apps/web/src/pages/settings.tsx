@@ -1,11 +1,17 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CheckSquare } from "lucide-react";
+import { CheckSquare, Save, Trash2 } from "lucide-react";
 import {
+  type Account,
   fromMinorUnits,
   type ImportCsvAiResponse,
   type Settings,
 } from "@moneyflow/shared";
+import { accountApi } from "@/entities/account/api/account-api";
+import {
+  accountKeys,
+  useAccountsQuery,
+} from "@/entities/account/model/queries";
 import { categoryKeys } from "@/entities/category/model/queries";
 import { statsKeys } from "@/entities/stats/model/queries";
 import { settingsApi } from "@/entities/settings/api/settings-api";
@@ -23,6 +29,7 @@ import { Textarea } from "@/shared/ui/textarea";
 export function SettingsPage() {
   const queryClient = useQueryClient();
   const settingsQuery = useSettingsQuery();
+  const accountsQuery = useAccountsQuery();
   const updateSettingsMutation = useMutation({
     mutationFn: settingsApi.updateSettings,
   });
@@ -45,9 +52,47 @@ export function SettingsPage() {
       ]);
     },
   });
+  const createAccountMutation = useMutation({
+    mutationFn: accountApi.createAccount,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: accountKeys.all });
+      await queryClient.invalidateQueries({ queryKey: transactionKeys.root });
+      await queryClient.invalidateQueries({
+        queryKey: statsKeys.dashboardRoot,
+      });
+    },
+  });
+  const updateAccountMutation = useMutation({
+    mutationFn: ({
+      id,
+      payload,
+    }: {
+      id: string;
+      payload: {
+        name: string;
+        matchHint: string | null;
+        openingBalance: number;
+      };
+    }) => accountApi.updateAccount(id, payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: accountKeys.all });
+      await queryClient.invalidateQueries({
+        queryKey: statsKeys.dashboardRoot,
+      });
+    },
+  });
+  const deleteAccountMutation = useMutation({
+    mutationFn: accountApi.deleteAccount,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: accountKeys.all });
+      await queryClient.invalidateQueries({ queryKey: transactionKeys.root });
+      await queryClient.invalidateQueries({
+        queryKey: statsKeys.dashboardRoot,
+      });
+    },
+  });
 
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [opening, setOpening] = useState("");
   const [saved, setSaved] = useState(false);
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [csvResult, setCsvResult] = useState<ImportCsvAiResponse | null>(null);
@@ -55,6 +100,13 @@ export function SettingsPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [showImportPrompt, setShowImportPrompt] = useState(false);
   const [importPrompt, setImportPrompt] = useState("");
+  const [newAccountName, setNewAccountName] = useState("");
+  const [newAccountHint, setNewAccountHint] = useState("");
+  const [newAccountOpening, setNewAccountOpening] = useState("0");
+  const [accountDrafts, setAccountDrafts] = useState<
+    Record<string, { name: string; matchHint: string; openingBalance: string }>
+  >({});
+  const [accountError, setAccountError] = useState<string | null>(null);
 
   useEffect(() => {
     const s = settingsQuery.data;
@@ -63,7 +115,6 @@ export function SettingsPage() {
       if (
         prev &&
         prev.currency === s.currency &&
-        prev.openingBalance === s.openingBalance &&
         prev.categorizationPrompt === s.categorizationPrompt &&
         prev.aiModel === s.aiModel &&
         prev.allowedTelegramIds === s.allowedTelegramIds
@@ -72,9 +123,6 @@ export function SettingsPage() {
       }
       return s;
     });
-    setOpening((prev) =>
-      prev.length > 0 ? prev : String(fromMinorUnits(s.openingBalance)),
-    );
   }, [settingsQuery.data]);
 
   if (settingsQuery.isPending && !settings) {
@@ -92,6 +140,14 @@ export function SettingsPage() {
     );
   }
 
+  const accounts = accountsQuery.data ?? [];
+  const ensureDraft = (account: Account) =>
+    accountDrafts[account.id] ?? {
+      name: account.name,
+      matchHint: account.matchHint ?? "",
+      openingBalance: String(fromMinorUnits(account.openingBalance)),
+    };
+
   return (
     <div className="mx-auto max-w-2xl space-y-5">
       <GlassCard className="space-y-5">
@@ -108,16 +164,6 @@ export function SettingsPage() {
                 currency: e.target.value.toUpperCase(),
               })
             }
-          />
-        </div>
-
-        <div>
-          <Label>Стартовый баланс</Label>
-          <Input
-            className="mt-1"
-            value={opening}
-            onChange={(e) => setOpening(e.target.value)}
-            placeholder="0"
           />
         </div>
 
@@ -155,16 +201,10 @@ export function SettingsPage() {
         <Button
           disabled={updateSettingsMutation.isPending}
           onClick={async () => {
-            const parsedOpening = parseDecimalInput(opening);
-            if (parsedOpening == null) {
-              setSaveError("Введите корректный стартовый баланс");
-              return;
-            }
             setSaveError(null);
             try {
               const updated = await updateSettingsMutation.mutateAsync({
                 currency: settings.currency,
-                openingBalance: parsedOpening,
                 categorizationPrompt: settings.categorizationPrompt,
                 allowedTelegramIds: settings.allowedTelegramIds,
               });
@@ -175,7 +215,6 @@ export function SettingsPage() {
                 }),
               ]);
               setSettings(updated);
-              setOpening(String(fromMinorUnits(updated.openingBalance)));
               setSaved(true);
               setTimeout(() => setSaved(false), 1500);
             } catch (error) {
@@ -191,6 +230,176 @@ export function SettingsPage() {
         </Button>
         {saveError && <p className="text-sm text-rose-600">{saveError}</p>}
         {saved && <p className="text-sm text-teal-700">Сохранено</p>}
+      </GlassCard>
+
+      <GlassCard className="space-y-4">
+        <h3 className="font-display text-xl">Счета</h3>
+        <p className="text-sm text-black/65">
+          Стартовый баланс задаётся отдельно на каждый счёт. `matchHint`
+          помогает ИИ распознавать счет по скринам банка (например: `Т-Банк,
+          Tinkoff, *1234`).
+        </p>
+        <div className="grid gap-3 md:grid-cols-[1.2fr_1.2fr_1fr_auto]">
+          <Input
+            value={newAccountName}
+            placeholder="Название счета"
+            onChange={(e) => setNewAccountName(e.target.value)}
+          />
+          <Input
+            value={newAccountHint}
+            placeholder="Подсказки для AI (через запятую)"
+            onChange={(e) => setNewAccountHint(e.target.value)}
+          />
+          <Input
+            placeholder="Стартовый баланс"
+            onChange={(e) => setNewAccountOpening(e.target.value)}
+            value={newAccountOpening}
+          />
+          <Button
+            disabled={createAccountMutation.isPending || !newAccountName.trim()}
+            onClick={async () => {
+              setAccountError(null);
+              try {
+                const parsedOpening = parseDecimalInput(newAccountOpening);
+                if (parsedOpening == null) {
+                  setAccountError("Некорректный стартовый баланс счета");
+                  return;
+                }
+                await createAccountMutation.mutateAsync({
+                  name: newAccountName.trim(),
+                  matchHint: newAccountHint.trim() || null,
+                  openingBalance: parsedOpening,
+                });
+                setNewAccountName("");
+                setNewAccountHint("");
+                setNewAccountOpening("0");
+              } catch (error) {
+                setAccountError(
+                  error instanceof Error
+                    ? error.message
+                    : "Не удалось создать счет",
+                );
+              }
+            }}
+          >
+            Добавить
+          </Button>
+        </div>
+
+        <div className="space-y-2">
+          {accounts.map((account) => {
+            const draft = ensureDraft(account);
+            const isSavingDraft =
+              updateAccountMutation.isPending ||
+              deleteAccountMutation.isPending;
+            return (
+              <div
+                key={account.id}
+                className="grid gap-2 rounded-2xl border border-black/10 bg-white/50 p-3 md:grid-cols-[1.2fr_1.2fr_1fr_auto_auto]"
+              >
+                <Input
+                  value={draft.name}
+                  onChange={(e) =>
+                    setAccountDrafts((prev) => ({
+                      ...prev,
+                      [account.id]: { ...draft, name: e.target.value },
+                    }))
+                  }
+                />
+                <Input
+                  value={draft.matchHint}
+                  placeholder="Подсказка для AI"
+                  onChange={(e) =>
+                    setAccountDrafts((prev) => ({
+                      ...prev,
+                      [account.id]: { ...draft, matchHint: e.target.value },
+                    }))
+                  }
+                />
+                <Input
+                  value={draft.openingBalance}
+                  placeholder="Стартовый баланс"
+                  onChange={(e) =>
+                    setAccountDrafts((prev) => ({
+                      ...prev,
+                      [account.id]: {
+                        ...draft,
+                        openingBalance: e.target.value,
+                      },
+                    }))
+                  }
+                />
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  disabled={isSavingDraft}
+                  aria-label="Сохранить"
+                  onClick={async () => {
+                    setAccountError(null);
+                    try {
+                      const parsedOpening = parseDecimalInput(
+                        draft.openingBalance,
+                      );
+                      if (parsedOpening == null) {
+                        setAccountError("Некорректный стартовый баланс счета");
+                        return;
+                      }
+                      await updateAccountMutation.mutateAsync({
+                        id: account.id,
+                        payload: {
+                          name: draft.name.trim(),
+                          matchHint: draft.matchHint.trim() || null,
+                          openingBalance: parsedOpening,
+                        },
+                      });
+                      setAccountDrafts((prev) => {
+                        const next = { ...prev };
+                        delete next[account.id];
+                        return next;
+                      });
+                    } catch (error) {
+                      setAccountError(
+                        error instanceof Error
+                          ? error.message
+                          : "Не удалось обновить счет",
+                      );
+                    }
+                  }}
+                >
+                  <Save className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size={account.isDefault ? "sm" : "icon"}
+                  disabled={isSavingDraft || account.isDefault}
+                  aria-label={account.isDefault ? "Default" : "Удалить"}
+                  onClick={async () => {
+                    setAccountError(null);
+                    if (!window.confirm("Удалить счет?")) return;
+                    try {
+                      await deleteAccountMutation.mutateAsync(account.id);
+                    } catch (error) {
+                      setAccountError(
+                        error instanceof Error
+                          ? error.message
+                          : "Не удалось удалить счет",
+                      );
+                    }
+                  }}
+                >
+                  {account.isDefault ? (
+                    "Default"
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+        {accountError ? (
+          <p className="text-sm text-rose-600">{accountError}</p>
+        ) : null}
       </GlassCard>
 
       <GlassCard className="space-y-4">

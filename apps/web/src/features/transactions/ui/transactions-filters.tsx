@@ -1,4 +1,4 @@
-import type { Category } from "@moneyflow/shared";
+import type { Account, Category } from "@moneyflow/shared";
 import { DateRangePicker } from "@/widgets/date-range/date-range-picker";
 import { Combobox } from "@/shared/ui/combobox";
 import { GlassCard } from "@/shared/ui/glass-card";
@@ -17,12 +17,15 @@ type TransactionsFiltersProps = {
   from: string;
   to: string;
   type: "" | "expense" | "income";
+  accountId: string;
   categoryId: string;
+  accounts: Account[];
   categories: Category[];
   allTimeFrom: string | null;
   onQChange: (value: string) => void;
   onPeriodChange: (next: { from: string; to: string }) => void;
   onTypeChange: (value: "" | "expense" | "income") => void;
+  onAccountChange: (value: string) => void;
   onCategoryChange: (value: string) => void;
 };
 
@@ -35,14 +38,21 @@ export function TransactionsFilters({
   from,
   to,
   type,
+  accountId,
   categoryId,
+  accounts,
   categories,
   allTimeFrom,
   onQChange,
   onPeriodChange,
   onTypeChange,
+  onAccountChange,
   onCategoryChange,
 }: TransactionsFiltersProps) {
+  const accountOptions = [
+    { value: "all", label: "Все счета" },
+    ...accounts.map((a) => ({ value: a.id, label: a.name })),
+  ];
   const categoryOptions = [
     { value: "all", label: "Все" },
     ...categories.map((c) => ({ value: c.id, label: c.name })),
@@ -74,7 +84,7 @@ export function TransactionsFilters({
           />
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3 md:col-span-2">
+      <div className="grid gap-3 md:col-span-2 md:grid-cols-3">
         <div>
           <Label>Тип</Label>
           <Select
@@ -90,6 +100,17 @@ export function TransactionsFilters({
               <SelectItem value="income">Доход</SelectItem>
             </SelectContent>
           </Select>
+        </div>
+        <div>
+          <Label>Счет</Label>
+          <Combobox
+            className="mt-1"
+            value={accountId || "all"}
+            onValueChange={(value) =>
+              onAccountChange(value === "all" ? "" : value)
+            }
+            options={accountOptions}
+          />
         </div>
         <div>
           <Label>Категория</Label>

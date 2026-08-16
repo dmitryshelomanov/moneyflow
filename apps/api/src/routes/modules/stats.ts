@@ -21,11 +21,18 @@ export function registerStatsRoutes(router: Hono<{ Variables: ApiVariables }>) {
   router.get("/stats/summary", (c) => {
     const validated = validateQuery(c, StatsSummaryQuerySchema, c.req.query());
     if (!validated.ok) return validated.response;
-    return c.json(getSummary(validated.data.from, validated.data.to));
+    return c.json(
+      getSummary(
+        validated.data.from,
+        validated.data.to,
+        validated.data.accountId,
+      ),
+    );
   });
 
   router.get("/stats/meta", (c) => {
-    return c.json(getStatsMeta());
+    const accountId = c.req.query("accountId")?.trim() || undefined;
+    return c.json(getStatsMeta(accountId));
   });
 
   router.get("/stats/timeseries", (c) => {
@@ -40,6 +47,7 @@ export function registerStatsRoutes(router: Hono<{ Variables: ApiVariables }>) {
         validated.data.from,
         validated.data.to,
         validated.data.granularity,
+        validated.data.accountId,
       ),
     );
   });
@@ -56,6 +64,7 @@ export function registerStatsRoutes(router: Hono<{ Variables: ApiVariables }>) {
         validated.data.from,
         validated.data.to,
         validated.data.granularity,
+        validated.data.accountId,
       ),
     );
   });
@@ -72,6 +81,7 @@ export function registerStatsRoutes(router: Hono<{ Variables: ApiVariables }>) {
         validated.data.from,
         validated.data.to,
         validated.data.type,
+        validated.data.accountId,
       ),
     );
   });
@@ -88,6 +98,7 @@ export function registerStatsRoutes(router: Hono<{ Variables: ApiVariables }>) {
         validated.data.from,
         validated.data.to,
         validated.data.type,
+        validated.data.accountId,
       ),
     );
   });

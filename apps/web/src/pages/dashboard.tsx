@@ -15,6 +15,7 @@ import { Button } from "@/shared/ui/button";
 import { GlassCard } from "@/shared/ui/glass-card";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
+import { Combobox } from "@/shared/ui/combobox";
 
 export function DashboardPage() {
   const { state, actions, mutations, queries } = useDashboard();
@@ -53,6 +54,24 @@ export function DashboardPage() {
           actions.setPeriod({ from: nextFrom, to: nextTo });
         }}
       />
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="w-full sm:max-w-xs">
+          <Combobox
+            value={state.selectedAccountId || "all"}
+            onValueChange={(value) =>
+              actions.setSelectedAccountId(value === "all" ? "" : value)
+            }
+            options={[
+              { value: "all", label: "Все счета" },
+              ...state.accounts.map((account) => ({
+                value: account.id,
+                label: account.name,
+              })),
+            ]}
+            placeholder="Фильтр по счету"
+          />
+        </div>
+      </div>
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
         <Button
           className="w-full sm:w-auto"
@@ -245,12 +264,14 @@ export function DashboardPage() {
             emptyLabel="Нет расходов за период"
             onSliceClick={(slice) => {
               if (!slice.categoryId) return;
-              const params = new URLSearchParams({
-                from: state.from,
-                to: state.to,
-                type: "expense",
-                categoryId: slice.categoryId,
-              });
+              const params = new URLSearchParams();
+              params.set("from", state.from);
+              params.set("to", state.to);
+              params.set("type", "expense");
+              params.set("categoryId", slice.categoryId);
+              if (state.selectedAccountId) {
+                params.set("accountId", state.selectedAccountId);
+              }
               navigate(`/transactions?${params.toString()}`);
             }}
           />
@@ -281,12 +302,14 @@ export function DashboardPage() {
           emptyLabel="Нет доходов за период"
           onSliceClick={(slice) => {
             if (!slice.categoryId) return;
-            const params = new URLSearchParams({
-              from: state.from,
-              to: state.to,
-              type: "income",
-              categoryId: slice.categoryId,
-            });
+            const params = new URLSearchParams();
+            params.set("from", state.from);
+            params.set("to", state.to);
+            params.set("type", "income");
+            params.set("categoryId", slice.categoryId);
+            if (state.selectedAccountId) {
+              params.set("accountId", state.selectedAccountId);
+            }
             navigate(`/transactions?${params.toString()}`);
           }}
         />
@@ -295,6 +318,16 @@ export function DashboardPage() {
       <GlassCard className="space-y-3">
         <Label>Быстрая запись</Label>
         <div className="flex flex-col gap-3 md:flex-row">
+          <Combobox
+            value={state.quickAccountId}
+            onValueChange={actions.setQuickAccountId}
+            options={state.accounts.map((account) => ({
+              value: account.id,
+              label: account.name,
+            }))}
+            placeholder="Счет"
+            className="md:max-w-[15rem]"
+          />
           <Input
             placeholder="кофе 350 или зарплата 100000"
             value={state.quickText}

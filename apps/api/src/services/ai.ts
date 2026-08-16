@@ -16,6 +16,7 @@ import { ZodError, z } from "zod";
 import { NotATransactionError } from "../bot-messages.js";
 import { env } from "../env.js";
 import { log } from "../log.js";
+import { listAccounts } from "./accounts.js";
 import { listCategories } from "./categories.js";
 import { getSettings } from "./settings.js";
 
@@ -98,10 +99,17 @@ function getClient() {
 function buildSystemPrompt(): string {
   const s = getSettings();
   const cats = listCategories();
+  const accounts = listAccounts();
   const catLines = cats
     .map(
       (c) =>
         `- "${c.name}" icon=${c.icon}${c.prompt ? ` prompt="${c.prompt}"` : ""}`,
+    )
+    .join("\n");
+  const accountLines = accounts
+    .map(
+      (a) =>
+        `- "${a.name}"${a.matchHint ? ` hint="${a.matchHint}"` : ""}${a.isDefault ? " (default)" : ""}`,
     )
     .join("\n");
 
@@ -129,6 +137,8 @@ function buildSystemPrompt(): string {
   "currency": string,
   "occurredAt": ISO-8601 datetime,
   "note": string,
+  "accountHint": string | null,
+  "accountConfidence": number 0..1,
   "categoryName": string | null,
   "createCategory": { "name": string, "icon": LucideIconName } | null,
   "confidence": number 0..1
@@ -156,6 +166,10 @@ function buildSystemPrompt(): string {
 - Сегодня (UTC): ${new Date().toISOString()}
 - Если пользователь пишет относительную дату («вчера»), вычисли occurredAt.
 - Выбери существующую категорию по имени, если подходит.
+- По скриншоту/чеку попытайся распознать счёт списания/зачисления и заполни accountHint:
+  название банка, тип счета, маска карты (например "Tinkoff *1234", "Наличные").
+- Если счёт не читается уверенно, accountHint = null.
+- accountConfidence — уверенность распознавания счёта (0..1).
 - Если подходящей нет — заполни createCategory (короткое русское имя + Lucide icon name в PascalCase).
 - categoryName должен совпадать с существующей или с createCategory.name.
 - Не выдумывай сумму, если её нет на фото/в тексте — верни ok:false.
@@ -168,6 +182,9 @@ ${s.categorizationPrompt || "(нет)"}
 
 Существующие категории:
 ${catLines || "(пока пусто — создай подходящую)"}
+
+Существующие счета:
+${accountLines || "(пока пусто — используй null в accountHint)"}
 `;
 }
 
@@ -295,6 +312,8 @@ function buildCsvImportSystemPrompt(promptExtension?: string): string {
       "currency": string,
       "occurredAt": ISO-8601 datetime,
       "note": string,
+      "accountHint": string | null,
+      "accountConfidence": number 0..1,
       "categoryName": string | null,
       "createCategory": { "name": string, "icon": LucideIconName } | null,
       "confidence": number 0..1
@@ -869,6 +888,8 @@ export function parseTransactionLocal(text: string): ParseBatch {
         currency: s.currency,
         occurredAt: occurredAt.toISOString(),
         note,
+        accountHint: null,
+        accountConfidence: 0.4,
         categoryName: null,
         createCategory: {
           name: isIncome ? "Доход" : "Прочее",
