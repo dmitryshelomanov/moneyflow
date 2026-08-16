@@ -27,6 +27,21 @@ export function validateBody<TSchema extends z.ZodTypeAny>(
   return { ok: true, data: parsed.data };
 }
 
+export function validateQuery<TSchema extends z.ZodTypeAny>(
+  c: Context,
+  schema: TSchema,
+  query: unknown,
+): ValidationResult<z.infer<TSchema>> {
+  const parsed = schema.safeParse(query);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      response: badRequest(c, parsed.error.flatten()),
+    };
+  }
+  return { ok: true, data: parsed.data };
+}
+
 export function badRequest(c: Context, error: unknown): Response {
   return c.json({ error }, 400);
 }

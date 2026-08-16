@@ -20,7 +20,6 @@ CREATE TABLE IF NOT EXISTS settings (
 CREATE TABLE IF NOT EXISTS categories (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
-  type TEXT NOT NULL CHECK(type IN ('expense', 'income')),
   icon TEXT NOT NULL DEFAULT 'Circle',
   prompt TEXT,
   created_at TEXT NOT NULL
@@ -42,6 +41,19 @@ CREATE TABLE IF NOT EXISTS transactions (
 CREATE INDEX IF NOT EXISTS idx_transactions_occurred_at ON transactions(occurred_at);
 CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type);
 CREATE INDEX IF NOT EXISTS idx_transactions_category_id ON transactions(category_id);
+
+CREATE TABLE IF NOT EXISTS advice_cache (
+  key TEXT PRIMARY KEY,
+  user_key TEXT NOT NULL,
+  from_ymd TEXT NOT NULL,
+  to_ymd TEXT NOT NULL,
+  max_tips INTEGER NOT NULL,
+  data_version TEXT NOT NULL,
+  payload TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_advice_cache_expires_at ON advice_cache(expires_at);
 `;
 
 function ensureSettingsColumns() {
@@ -74,4 +86,9 @@ export function migrate() {
   }
 
   seedBaseCategories();
+}
+
+const isDirectRun = process.argv[1]?.includes("migrate");
+if (isDirectRun) {
+  migrate();
 }

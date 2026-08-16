@@ -22,7 +22,6 @@ export const log = {
     console.log(fmt(scope, message, data));
   },
   info(scope: string, message: string, data?: unknown) {
-    if (!isDev) return;
     console.info(fmt(scope, message, data));
   },
   warn(scope: string, message: string, data?: unknown) {

@@ -12,7 +12,6 @@ export const settings = sqliteTable("settings", {
 export const categories = sqliteTable("categories", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
-  type: text("type", { enum: ["expense", "income"] }).notNull(),
   icon: text("icon").notNull().default("Circle"),
   prompt: text("prompt"),
   createdAt: text("created_at").notNull(),

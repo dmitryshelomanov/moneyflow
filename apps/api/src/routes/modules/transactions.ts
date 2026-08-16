@@ -1,5 +1,6 @@
 import {
   CreateTransactionSchema,
+  TransactionsListQuerySchema,
   UpdateTransactionSchema,
 } from "@moneyflow/shared";
 import { Hono } from "hono";
@@ -16,31 +17,20 @@ import {
   notFound,
   readJsonBody,
   validateBody,
+  validateQuery,
 } from "../helpers/http.js";
 
 export function registerTransactionRoutes(
   router: Hono<{ Variables: ApiVariables }>,
 ) {
   router.get("/transactions", (c) => {
-    try {
-      return c.json(
-        listTransactionsPage({
-          from: c.req.query("from") ?? undefined,
-          to: c.req.query("to") ?? undefined,
-          type: c.req.query("type") as "expense" | "income" | undefined,
-          categoryId: c.req.query("categoryId") ?? undefined,
-          limit: c.req.query("limit")
-            ? Number(c.req.query("limit"))
-            : undefined,
-          cursor: c.req.query("cursor") ?? undefined,
-        }),
-      );
-    } catch (error) {
-      if (error instanceof Error && error.message === "Invalid cursor") {
-        return badRequest(c, "Invalid cursor");
-      }
-      throw error;
-    }
+    const validated = validateQuery(
+      c,
+      TransactionsListQuerySchema,
+      c.req.query(),
+    );
+    if (!validated.ok) return validated.response;
+    return c.json(listTransactionsPage(validated.data));
   });
 
   router.get("/transactions/:id", (c) => {

@@ -202,22 +202,21 @@ function shouldRecategorizeToMortgage(
   );
 }
 
-function categoryKey(name: string, type: TxType): string {
-  return `${type}\u0000${name.toLowerCase()}`;
+function categoryKey(name: string): string {
+  return name.toLowerCase();
 }
 
 function resolveCategoryId(
   categoryName: string | null,
-  type: TxType,
   cache: Map<string, string>,
   stats: ImportStats,
 ): string | null {
   if (!categoryName) return null;
-  const key = categoryKey(categoryName, type);
+  const key = categoryKey(categoryName);
   const cached = cache.get(key);
   if (cached) return cached;
 
-  const existing = findCategoryByName(categoryName, type);
+  const existing = findCategoryByName(categoryName);
   if (existing) {
     cache.set(key, existing.id);
     return existing.id;
@@ -225,7 +224,6 @@ function resolveCategoryId(
 
   const created = createCategory({
     name: categoryName,
-    type,
     icon: "Circle",
     prompt: null,
   });
@@ -304,7 +302,7 @@ export function importBankCsv(csvPath: string) {
       stats.recategorizedMortgage += 1;
     }
 
-    const categoryId = resolveCategoryId(categoryName, type, cache, stats);
+    const categoryId = resolveCategoryId(categoryName, cache, stats);
     const note = buildNote(row);
 
     createTransaction({

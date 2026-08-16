@@ -28,16 +28,18 @@ const EnvSchema = z.object({
 
 const parsed = EnvSchema.safeParse(process.env);
 if (!parsed.success) {
-  console.error("Invalid environment:", parsed.error.flatten().fieldErrors);
-  process.exit(1);
+  throw new Error(
+    `Invalid environment: ${JSON.stringify(parsed.error.flatten().fieldErrors)}`,
+  );
 }
 
 const raw = parsed.data;
 export const env = {
   ...raw,
-  DATABASE_PATH: path.isAbsolute(raw.DATABASE_PATH)
-    ? raw.DATABASE_PATH
-    : path.resolve(root, raw.DATABASE_PATH),
+  DATABASE_PATH:
+    raw.DATABASE_PATH === ":memory:" || path.isAbsolute(raw.DATABASE_PATH)
+      ? raw.DATABASE_PATH
+      : path.resolve(root, raw.DATABASE_PATH),
 };
 
 export function parseTelegramIds(rawIds: string): number[] {

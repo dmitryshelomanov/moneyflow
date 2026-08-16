@@ -32,7 +32,7 @@ function randInt(min: number, max: number) {
   return min + Math.floor(Math.random() * (max - min + 1));
 }
 
-type Cat = { id: string; name: string; type: "expense" | "income" };
+type Cat = { id: string; name: string };
 
 type Draft = {
   type: "expense" | "income";
@@ -317,7 +317,7 @@ export function seedDemoTransactions(monthsBack = 6) {
 
   for (const draft of drafts) {
     const cat = byName.get(draft.categoryName);
-    if (!cat || cat.type !== draft.type) {
+    if (!cat) {
       throw new Error(`Category missing: ${draft.categoryName}`);
     }
     db.insert(transactions)

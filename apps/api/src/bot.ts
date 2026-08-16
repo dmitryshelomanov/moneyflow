@@ -271,7 +271,7 @@ export function createBot() {
       const file = await ctx.api.getFile(best.file_id);
       if (!file.file_path) throw new Error("No file path");
       const url = `https://api.telegram.org/file/bot${env.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
-      const res = await fetch(url);
+      const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
       if (!res.ok) throw new Error("Failed to download photo");
       const ab = await res.arrayBuffer();
       buffer = Buffer.from(ab);

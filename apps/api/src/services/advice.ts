@@ -6,18 +6,19 @@ import {
 } from "@moneyflow/shared";
 import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { createHash } from "node:crypto";
-import { db, sqlite } from "../db/client.js";
+import type { z } from "zod";
+import { db } from "../db/client.js";
 import { adviceCache, transactions } from "../db/schema.js";
 import { log } from "../log.js";
-import { getSettings } from "./money.js";
+import { listCategories } from "./categories.js";
+import { getSettings } from "./settings.js";
 import {
   getCategoryPareto,
   getSpendingHeatmap,
   getSummary,
   getTimeseries,
-  listCategories,
-  listTransactions,
-} from "./money.js";
+} from "./stats.js";
+import { listTransactions } from "./transactions.js";
 import { generateFinancePulse, generateSavingsAdvice } from "./ai.js";
 
 type BuildSavingsAdviceInput = {
@@ -63,7 +64,6 @@ type PatternBucket = {
 
 const DEFAULT_ADVICE_CACHE_TTL_SECONDS = 6 * 60 * 60;
 const DEFAULT_ADVICE_CACHE_USER_KEY = "default";
-let adviceCacheTableReady = false;
 
 function getAdviceCacheTtlMs() {
   const fromEnv = Number(process.env.ADVICE_CACHE_TTL_SECONDS ?? "");
@@ -71,25 +71,6 @@ function getAdviceCacheTtlMs() {
     return Math.round(fromEnv * 1000);
   }
   return DEFAULT_ADVICE_CACHE_TTL_SECONDS * 1000;
-}
-
-function ensureAdviceCacheTable() {
-  if (adviceCacheTableReady) return;
-  sqlite.exec(`
-CREATE TABLE IF NOT EXISTS advice_cache (
-  key TEXT PRIMARY KEY,
-  user_key TEXT NOT NULL,
-  from_ymd TEXT NOT NULL,
-  to_ymd TEXT NOT NULL,
-  max_tips INTEGER NOT NULL,
-  data_version TEXT NOT NULL,
-  payload TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  expires_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_advice_cache_expires_at ON advice_cache(expires_at);
-`);
-  adviceCacheTableReady = true;
 }
 
 function buildAdviceCacheKey(input: {
@@ -140,51 +121,53 @@ function maybeCleanupExpiredAdviceCache(nowIso: string) {
   db.delete(adviceCache).where(lte(adviceCache.expiresAt, nowIso)).run();
 }
 
-function readAdviceFromCache(
+function readTypedFromCache<T>(
   key: string,
   nowIso: string,
-): SavingsAdviceResponse | null {
+  schema: z.ZodType<T>,
+  label: string,
+): T | null {
   const cached = db
     .select()
     .from(adviceCache)
     .where(eq(adviceCache.key, key))
     .get();
   if (!cached) {
-    log.debug("advice", "cache=miss");
+    log.debug("advice", `${label} cache=miss`);
     return null;
   }
 
   if (cached.expiresAt <= nowIso) {
-    log.debug("advice", "cache=expired");
+    log.debug("advice", `${label} cache=expired`);
     db.delete(adviceCache).where(eq(adviceCache.key, key)).run();
     return null;
   }
 
   try {
     const parsedJson = JSON.parse(cached.payload);
-    const parsed = SavingsAdviceResponseSchema.safeParse(parsedJson);
+    const parsed = schema.safeParse(parsedJson);
     if (!parsed.success) {
-      log.debug("advice", "cache=invalid_payload");
+      log.debug("advice", `${label} cache=invalid_payload`);
       db.delete(adviceCache).where(eq(adviceCache.key, key)).run();
       return null;
     }
-    log.debug("advice", "cache=hit");
+    log.debug("advice", `${label} cache=hit`);
     return parsed.data;
   } catch {
-    log.debug("advice", "cache=invalid_json");
+    log.debug("advice", `${label} cache=invalid_json`);
     db.delete(adviceCache).where(eq(adviceCache.key, key)).run();
     return null;
   }
 }
 
-function writeAdviceToCache(input: {
+function writeTypedToCache(input: {
   key: string;
   userKey: string;
   from: string;
   to: string;
-  maxTips: number;
+  maxTips: number | null;
   dataVersion: string;
-  payload: SavingsAdviceResponse;
+  payload: unknown;
   nowIso: string;
 }) {
   const expiresAt = new Date(
@@ -197,7 +180,7 @@ function writeAdviceToCache(input: {
       userKey: input.userKey,
       from: input.from,
       to: input.to,
-      maxTips: input.maxTips,
+      maxTips: input.maxTips ?? 0,
       dataVersion: input.dataVersion,
       payload: JSON.stringify(input.payload),
       createdAt: input.nowIso,
@@ -209,7 +192,7 @@ function writeAdviceToCache(input: {
         userKey: input.userKey,
         from: input.from,
         to: input.to,
-        maxTips: input.maxTips,
+        maxTips: input.maxTips ?? 0,
         dataVersion: input.dataVersion,
         payload: JSON.stringify(input.payload),
         createdAt: input.nowIso,
@@ -256,17 +239,6 @@ function previousPeriodYmdRange(fromYmd: string, toYmd: string) {
 
 function toYmd(iso: string) {
   return iso.slice(0, 10);
-}
-
-function fixedLastSixMonthsYmdRange() {
-  const toDate = new Date();
-  toDate.setHours(0, 0, 0, 0);
-  const fromDate = new Date(toDate);
-  fromDate.setMonth(fromDate.getMonth() - 6);
-  return {
-    from: toYmd(fromDate.toISOString()),
-    to: toYmd(toDate.toISOString()),
-  };
 }
 
 function normalizeSpendKey(note: string, categoryName: string) {
@@ -384,10 +356,8 @@ function collectNotePatterns(expenses: LargeExpense[]): PatternBucket[] {
 export async function buildSavingsAdvice(
   input: BuildSavingsAdviceInput,
 ): Promise<SavingsAdviceResponse> {
-  ensureAdviceCacheTable();
-  const fixedRange = fixedLastSixMonthsYmdRange();
-  const { fromIso, toIso } = toIsoRange(fixedRange.from, fixedRange.to);
-  const previous = previousPeriodYmdRange(fixedRange.from, fixedRange.to);
+  const { fromIso, toIso } = toIsoRange(input.from, input.to);
+  const previous = previousPeriodYmdRange(input.from, input.to);
   const previousRangeIso = toIsoRange(previous.from, previous.to);
   const nowIso = new Date().toISOString();
   maybeCleanupExpiredAdviceCache(nowIso);
@@ -401,7 +371,12 @@ export async function buildSavingsAdvice(
     maxTips: input.maxTips,
     dataVersion,
   });
-  const cachedAdvice = readAdviceFromCache(cacheKey, nowIso);
+  const cachedAdvice = readTypedFromCache(
+    cacheKey,
+    nowIso,
+    SavingsAdviceResponseSchema,
+    "savings",
+  );
   if (cachedAdvice) return cachedAdvice;
 
   const [summary, previousSummary, expensePareto, expenseHeatmap, daySeries] =
@@ -414,7 +389,7 @@ export async function buildSavingsAdvice(
     ]);
 
   const settings = getSettings();
-  const categories = listCategories("expense");
+  const categories = listCategories();
   const categoryMap = new Map(categories.map((cat) => [cat.id, cat.name]));
   const rawExpenses = listTransactions({
     from: fromIso,
@@ -474,8 +449,8 @@ export async function buildSavingsAdvice(
   ].slice(0, 40);
 
   const advice = await generateSavingsAdvice({
-    from: fixedRange.from,
-    to: fixedRange.to,
+    from: input.from,
+    to: input.to,
     currency: summary.currency || settings.currency,
     maxTips: input.maxTips,
     periodIncome: summary.periodIncome,
@@ -498,7 +473,7 @@ export async function buildSavingsAdvice(
     peakSpendHour: peakCell?.hour ?? null,
     peakSpendWeekday: peakCell?.weekday ?? null,
   });
-  writeAdviceToCache({
+  writeTypedToCache({
     key: cacheKey,
     userKey,
     from: input.from,
@@ -524,88 +499,9 @@ function buildPulseCacheKey(input: {
     .digest("hex");
 }
 
-function readPulseFromCache(
-  key: string,
-  nowIso: string,
-): FinancePulseResponse | null {
-  const cached = db
-    .select()
-    .from(adviceCache)
-    .where(eq(adviceCache.key, key))
-    .get();
-  if (!cached) {
-    log.debug("advice", "pulse cache=miss");
-    return null;
-  }
-
-  if (cached.expiresAt <= nowIso) {
-    log.debug("advice", "pulse cache=expired");
-    db.delete(adviceCache).where(eq(adviceCache.key, key)).run();
-    return null;
-  }
-
-  try {
-    const parsedJson = JSON.parse(cached.payload);
-    const parsed = FinancePulseResponseSchema.safeParse(parsedJson);
-    if (!parsed.success) {
-      log.debug("advice", "pulse cache=invalid_payload");
-      db.delete(adviceCache).where(eq(adviceCache.key, key)).run();
-      return null;
-    }
-    log.debug("advice", "pulse cache=hit");
-    return parsed.data;
-  } catch {
-    log.debug("advice", "pulse cache=invalid_json");
-    db.delete(adviceCache).where(eq(adviceCache.key, key)).run();
-    return null;
-  }
-}
-
-function writePulseToCache(input: {
-  key: string;
-  userKey: string;
-  from: string;
-  to: string;
-  dataVersion: string;
-  payload: FinancePulseResponse;
-  nowIso: string;
-}) {
-  const expiresAt = new Date(
-    new Date(input.nowIso).getTime() + getAdviceCacheTtlMs(),
-  ).toISOString();
-
-  db.insert(adviceCache)
-    .values({
-      key: input.key,
-      userKey: input.userKey,
-      from: input.from,
-      to: input.to,
-      maxTips: 0,
-      dataVersion: input.dataVersion,
-      payload: JSON.stringify(input.payload),
-      createdAt: input.nowIso,
-      expiresAt,
-    })
-    .onConflictDoUpdate({
-      target: adviceCache.key,
-      set: {
-        userKey: input.userKey,
-        from: input.from,
-        to: input.to,
-        maxTips: 0,
-        dataVersion: input.dataVersion,
-        payload: JSON.stringify(input.payload),
-        createdAt: input.nowIso,
-        expiresAt,
-      },
-    })
-    .run();
-}
-
 export async function buildFinancePulse(
   input: BuildFinancePulseInput,
 ): Promise<FinancePulseResponse> {
-  ensureAdviceCacheTable();
   const { fromIso, toIso } = toIsoRange(input.from, input.to);
   const previous = previousPeriodYmdRange(input.from, input.to);
   const previousRangeIso = toIsoRange(previous.from, previous.to);
@@ -620,7 +516,12 @@ export async function buildFinancePulse(
     to: input.to,
     dataVersion,
   });
-  const cached = readPulseFromCache(cacheKey, nowIso);
+  const cached = readTypedFromCache(
+    cacheKey,
+    nowIso,
+    FinancePulseResponseSchema,
+    "pulse",
+  );
   if (cached) return cached;
 
   const [summary, previousSummary, daySeries] = await Promise.all([
@@ -765,11 +666,12 @@ export async function buildFinancePulse(
     generatedAt: ai.generatedAt,
   };
 
-  writePulseToCache({
+  writeTypedToCache({
     key: cacheKey,
     userKey,
     from: input.from,
     to: input.to,
+    maxTips: null,
     dataVersion,
     payload: response,
     nowIso,

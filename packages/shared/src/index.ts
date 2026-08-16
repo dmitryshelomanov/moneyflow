@@ -6,7 +6,6 @@ export type TransactionType = z.infer<typeof TransactionTypeSchema>;
 export const CategorySchema = z.object({
   id: z.string(),
   name: z.string().min(1),
-  type: TransactionTypeSchema,
   icon: z.string().min(1),
   prompt: z.string().nullable(),
   createdAt: z.string(),
@@ -15,7 +14,6 @@ export type Category = z.infer<typeof CategorySchema>;
 
 export const CreateCategorySchema = z.object({
   name: z.string().min(1).max(80),
-  type: TransactionTypeSchema,
   icon: z.string().min(1).default("Circle"),
   prompt: z.string().max(2000).nullable().optional(),
 });
@@ -98,7 +96,6 @@ export const ParseResultSchema = z.object({
   createCategory: z
     .object({
       name: z.string().min(1),
-      type: TransactionTypeSchema,
       icon: z.string().optional(),
     })
     .nullable()
@@ -131,6 +128,96 @@ export const ParseResponseSchema = z.union([
   ParseResultSchema.extend({ ok: z.literal(true).optional() }),
 ]);
 export type ParseResponse = z.infer<typeof ParseResponseSchema>;
+
+export const ParseRequestSchema = z
+  .object({
+    text: z.string().max(10_000).optional(),
+    imageBase64: z.string().max(5_000_000).optional(),
+    imageMime: z.string().max(120).optional(),
+    save: z.boolean().optional().default(true),
+  })
+  .refine((value) => Boolean(value.text || value.imageBase64), {
+    message: "text or imageBase64 required",
+  });
+export type ParseRequest = z.infer<typeof ParseRequestSchema>;
+
+export const ImportCsvAiRequestSchema = z.object({
+  csv: z.string().min(1).max(2_000_000),
+  filename: z.string().max(255).optional(),
+  promptExtension: z.string().max(4_000).optional(),
+});
+export type ImportCsvAiRequest = z.infer<typeof ImportCsvAiRequestSchema>;
+
+export const ImportCsvAiResponseSchema = z.object({
+  totalRows: z.number().int().nonnegative(),
+  parsed: z.number().int().nonnegative(),
+  saved: z.number().int().nonnegative(),
+  skipped: z.number().int().nonnegative(),
+  errors: z.array(z.string().min(1)),
+});
+export type ImportCsvAiResponse = z.infer<typeof ImportCsvAiResponseSchema>;
+
+const DateInputSchema = z
+  .string()
+  .min(1)
+  .refine((value) => Number.isFinite(Date.parse(value)), {
+    message: "Invalid date",
+  });
+const StatsGranularitySchema = z.enum(["day", "week", "month", "year"]);
+
+export const StatsRangeQuerySchema = z.object({
+  from: DateInputSchema,
+  to: DateInputSchema,
+});
+export type StatsRangeQuery = z.infer<typeof StatsRangeQuerySchema>;
+
+export const StatsSummaryQuerySchema = z.object({
+  from: DateInputSchema.optional(),
+  to: DateInputSchema.optional(),
+});
+export type StatsSummaryQuery = z.infer<typeof StatsSummaryQuerySchema>;
+
+export const StatsTimeseriesQuerySchema = StatsRangeQuerySchema.extend({
+  granularity: StatsGranularitySchema.optional().default("day"),
+});
+export type StatsTimeseriesQuery = z.infer<typeof StatsTimeseriesQuerySchema>;
+
+export const StatsBalanceSeriesQuerySchema = StatsRangeQuerySchema.extend({
+  granularity: StatsGranularitySchema.optional().default("month"),
+});
+export type StatsBalanceSeriesQuery = z.infer<
+  typeof StatsBalanceSeriesQuerySchema
+>;
+
+export const StatsCategoryParetoQuerySchema = StatsRangeQuerySchema.extend({
+  type: TransactionTypeSchema.optional().default("expense"),
+});
+export type StatsCategoryParetoQuery = z.infer<
+  typeof StatsCategoryParetoQuerySchema
+>;
+
+export const StatsSpendingHeatmapQuerySchema = StatsRangeQuerySchema.extend({
+  type: TransactionTypeSchema.optional().default("expense"),
+});
+export type StatsSpendingHeatmapQuery = z.infer<
+  typeof StatsSpendingHeatmapQuerySchema
+>;
+
+export const TransactionsListQuerySchema = z.object({
+  from: DateInputSchema.optional(),
+  to: DateInputSchema.optional(),
+  type: TransactionTypeSchema.optional(),
+  categoryId: z.string().min(1).optional(),
+  q: z
+    .string()
+    .trim()
+    .max(100)
+    .optional()
+    .transform((value) => (value ? value : undefined)),
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+  cursor: z.string().min(1).optional(),
+});
+export type TransactionsListQuery = z.infer<typeof TransactionsListQuerySchema>;
 
 export const StatsSummarySchema = z.object({
   currency: z.string(),
@@ -166,8 +253,8 @@ export const SavingsAdviceImpactSchema = z.enum(["low", "medium", "high"]);
 export type SavingsAdviceImpact = z.infer<typeof SavingsAdviceImpactSchema>;
 
 export const SavingsAdviceRequestSchema = z.object({
-  from: z.string().min(1),
-  to: z.string().min(1),
+  from: DateInputSchema,
+  to: DateInputSchema,
   maxTips: z.number().int().min(1).max(10).optional(),
 });
 export type SavingsAdviceRequest = z.infer<typeof SavingsAdviceRequestSchema>;
@@ -200,8 +287,8 @@ export const FinancePulseVerdictSchema = z.enum(["ok", "tight", "bad"]);
 export type FinancePulseVerdict = z.infer<typeof FinancePulseVerdictSchema>;
 
 export const FinancePulseRequestSchema = z.object({
-  from: z.string().min(1),
-  to: z.string().min(1),
+  from: DateInputSchema,
+  to: DateInputSchema,
 });
 export type FinancePulseRequest = z.infer<typeof FinancePulseRequestSchema>;
 

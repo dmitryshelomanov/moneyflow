@@ -18,8 +18,7 @@ export function registerCategoryRoutes(
   router: Hono<{ Variables: ApiVariables }>,
 ) {
   router.get("/categories", (c) => {
-    const type = c.req.query("type") as "expense" | "income" | undefined;
-    return c.json(listCategories(type));
+    return c.json(listCategories());
   });
 
   router.post("/categories", async (c) => {

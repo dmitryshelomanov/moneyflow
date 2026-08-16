@@ -16,12 +16,20 @@ import { ZodError, z } from "zod";
 import { NotATransactionError } from "../bot-messages.js";
 import { env } from "../env.js";
 import { log } from "../log.js";
-import { getSettings, listCategories } from "./money.js";
+import { listCategories } from "./categories.js";
+import { getSettings } from "./settings.js";
 
 type ParseInputOptions = {
   text?: string;
   imageBase64?: string;
   imageMime?: string;
+};
+
+type CsvImportInput = {
+  headers: string[];
+  rows: Array<Record<string, string>>;
+  chunkIndex: number;
+  promptExtension?: string;
 };
 
 const UNKNOWN_MODEL_RESPONSE = "Модель вернула непонятный ответ";
@@ -35,6 +43,47 @@ const IMAGE_FALLBACK_HELP =
   "На фото не видно чека или списка трат. Пришли квитанцию, скрин банка или напиши текстом.";
 const ADVICE_DISCLAIMER =
   "Советы носят ориентировочный характер и не являются финансовой консультацией.";
+const AI_TIMEOUT_MS = 30_000;
+
+function getAiModel() {
+  return getSettings().aiModel || env.ROUTERAI_MODEL;
+}
+
+function isAbortLikeError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const name =
+    "name" in error ? String((error as { name?: unknown }).name) : "";
+  if (name === "AbortError" || name === "TimeoutError") return true;
+  const message =
+    "message" in error ? String((error as { message?: unknown }).message) : "";
+  return /aborted|timeout|timed out/i.test(message);
+}
+
+function normalizeAiTransportError(error: unknown): never {
+  if (isAbortLikeError(error)) {
+    throw new Error("AI request timed out");
+  }
+  throw error;
+}
+
+async function createJsonCompletion(input: {
+  client: OpenAI;
+  model: string;
+  temperature: number;
+  messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[];
+}) {
+  return input.client.chat.completions
+    .create(
+      {
+        model: input.model,
+        temperature: input.temperature,
+        messages: input.messages,
+        response_format: { type: "json_object" },
+      },
+      { signal: AbortSignal.timeout(AI_TIMEOUT_MS) },
+    )
+    .catch(normalizeAiTransportError);
+}
 
 function getClient() {
   if (!env.ROUTERAI_API_KEY) {
@@ -52,7 +101,7 @@ function buildSystemPrompt(): string {
   const catLines = cats
     .map(
       (c) =>
-        `- [${c.type}] "${c.name}" icon=${c.icon}${c.prompt ? ` prompt="${c.prompt}"` : ""}`,
+        `- "${c.name}" icon=${c.icon}${c.prompt ? ` prompt="${c.prompt}"` : ""}`,
     )
     .join("\n");
 
@@ -81,7 +130,7 @@ function buildSystemPrompt(): string {
   "occurredAt": ISO-8601 datetime,
   "note": string,
   "categoryName": string | null,
-  "createCategory": { "name": string, "type": "expense"|"income", "icon": LucideIconName } | null,
+  "createCategory": { "name": string, "icon": LucideIconName } | null,
   "confidence": number 0..1
 }
 
@@ -221,6 +270,58 @@ function buildUserContent(
   }
 
   return userContent;
+}
+
+function buildCsvImportSystemPrompt(promptExtension?: string): string {
+  const s = getSettings();
+  const cats = listCategories();
+  const catLines = cats
+    .map(
+      (c) =>
+        `- "${c.name}" icon=${c.icon}${c.prompt ? ` prompt="${c.prompt}"` : ""}`,
+    )
+    .join("\n");
+
+  return `Ты импортируешь CSV в формат финансовых транзакций.
+Верни ТОЛЬКО валидный JSON без markdown.
+
+Требуется формат:
+{
+  "kind": "list",
+  "transactions": [
+    {
+      "type": "expense" | "income",
+      "amount": number (> 0, основные единицы валюты),
+      "currency": string,
+      "occurredAt": ISO-8601 datetime,
+      "note": string,
+      "categoryName": string | null,
+      "createCategory": { "name": string, "icon": LucideIconName } | null,
+      "confidence": number 0..1
+    }
+  ]
+}
+
+Правила:
+- Обрабатывай каждую строку CSV как максимум одну транзакцию.
+- Пропускай строки, которые не являются движением денег.
+- Не выдумывай суммы и даты; если данных нет — пропусти строку.
+- amount всегда положительный. type определяет расход/доход.
+- Валюта по умолчанию: ${s.currency}
+- Категории выбирай из существующих. Если подходящей нет, укажи createCategory.
+- categoryName должен быть либо существующей категорией, либо createCategory.name.
+- note делай коротким и полезным (мерчант/описание операции).
+- kind всегда "list".
+
+Глобальные правила категоризации от пользователя:
+${s.categorizationPrompt || "(нет)"}
+
+Существующие категории:
+${catLines || "(пока пусто — создай подходящую)"}
+
+Дополнительная подсказка пользователя для текущего импорта:
+${promptExtension?.trim() || "(нет)"}
+`;
 }
 
 const AdviceModelSchema = z.object({
@@ -364,10 +465,11 @@ export async function generateSavingsAdvice(
   input: SavingsAdviceInput,
 ): Promise<SavingsAdviceResponse> {
   const client = getClient();
+  const model = getAiModel();
   const started = Date.now();
 
   log.debug("ai", "savings advice start", {
-    model: env.ROUTERAI_MODEL,
+    model,
     period: `${input.from}..${input.to}`,
     maxTips: input.maxTips,
   });
@@ -378,8 +480,9 @@ export async function generateSavingsAdvice(
   }));
   const factById = new Map(preparedFacts.map((item) => [item.id, item.text]));
 
-  const completion = await client.chat.completions.create({
-    model: env.ROUTERAI_MODEL,
+  const completion = await createJsonCompletion({
+    client,
+    model,
     temperature: 0.2,
     messages: [
       {
@@ -413,7 +516,6 @@ export async function generateSavingsAdvice(
         }),
       },
     ],
-    response_format: { type: "json_object" },
   });
 
   const content = completion.choices[0]?.message?.content;
@@ -486,7 +588,7 @@ export async function generateSavingsAdvice(
     currency: input.currency,
     tips: safeTips,
     disclaimer: parsed.disclaimer ?? ADVICE_DISCLAIMER,
-    model: env.ROUTERAI_MODEL,
+    model,
     generatedAt: new Date().toISOString(),
   };
 
@@ -587,10 +689,11 @@ export async function generateFinancePulse(
   >
 > {
   const client = getClient();
+  const model = getAiModel();
   const started = Date.now();
 
   log.debug("ai", "finance pulse start", {
-    model: env.ROUTERAI_MODEL,
+    model,
     period: `${input.from}..${input.to}`,
     expenseCategories: input.topExpenseCategories.length,
   });
@@ -602,8 +705,9 @@ export async function generateFinancePulse(
     deltaFormatted: formatMajor(item.delta, input.currency),
   });
 
-  const completion = await client.chat.completions.create({
-    model: env.ROUTERAI_MODEL,
+  const completion = await createJsonCompletion({
+    client,
+    model,
     temperature: 0.35,
     messages: [
       {
@@ -658,7 +762,6 @@ export async function generateFinancePulse(
         }),
       },
     ],
-    response_format: { type: "json_object" },
   });
 
   const content = completion.choices[0]?.message?.content;
@@ -686,7 +789,7 @@ export async function generateFinancePulse(
     summary: parsed.summary.trim(),
     highlights,
     disclaimer: parsed.disclaimer ?? PULSE_DISCLAIMER,
-    model: env.ROUTERAI_MODEL,
+    model,
     generatedAt: new Date().toISOString(),
   };
 }
@@ -695,11 +798,12 @@ export async function parseTransactionInput(
   opts: ParseInputOptions,
 ): Promise<ParseBatch> {
   const client = getClient();
+  const model = getAiModel();
   const userContent = buildUserContent(opts);
   const started = Date.now();
 
   log.debug("ai", "parse start", {
-    model: env.ROUTERAI_MODEL,
+    model,
     hasText: Boolean(opts.text?.trim()),
     hasImage: Boolean(opts.imageBase64),
     textPreview: opts.text?.trim().slice(0, 120),
@@ -708,14 +812,14 @@ export async function parseTransactionInput(
       : 0,
   });
 
-  const completion = await client.chat.completions.create({
-    model: env.ROUTERAI_MODEL,
+  const completion = await createJsonCompletion({
+    client,
+    model,
     temperature: 0.1,
     messages: [
       { role: "system", content: buildSystemPrompt() },
       { role: "user", content: userContent },
     ],
-    response_format: { type: "json_object" },
   });
 
   const content = completion.choices[0]?.message?.content;
@@ -768,7 +872,6 @@ export function parseTransactionLocal(text: string): ParseBatch {
         categoryName: null,
         createCategory: {
           name: isIncome ? "Доход" : "Прочее",
-          type: isIncome ? "income" : "expense",
           icon: isIncome ? "Wallet" : "Circle",
         },
         confidence: 0.4,
@@ -822,4 +925,54 @@ export async function parseSmart(opts: ParseInputOptions): Promise<ParseBatch> {
   throw new NotATransactionError(
     "Для разбора фото нужен ROUTERAI_API_KEY. Пока можешь писать текстом.",
   );
+}
+
+export async function parseCsvRowsWithAi(
+  input: CsvImportInput,
+): Promise<ParseBatch> {
+  const client = getClient();
+  const model = getAiModel();
+  const started = Date.now();
+
+  log.debug("ai", "csv import parse start", {
+    model,
+    chunkIndex: input.chunkIndex,
+    headers: input.headers.length,
+    rows: input.rows.length,
+  });
+
+  const completion = await createJsonCompletion({
+    client,
+    model,
+    temperature: 0.1,
+    messages: [
+      {
+        role: "system",
+        content: buildCsvImportSystemPrompt(input.promptExtension),
+      },
+      {
+        role: "user",
+        content: JSON.stringify({
+          chunkIndex: input.chunkIndex,
+          headers: input.headers,
+          rows: input.rows,
+        }),
+      },
+    ],
+  });
+
+  const content = completion.choices[0]?.message?.content;
+  if (!content) {
+    throw new Error("Пустой ответ от модели при импорте CSV");
+  }
+
+  const json = extractJson(content);
+  const parsed = interpretParseJson(json);
+  log.debug("ai", "csv import parse ok", {
+    ms: Date.now() - started,
+    chunkIndex: input.chunkIndex,
+    count: parsed.transactions.length,
+    usage: completion.usage,
+  });
+  return parsed;
 }

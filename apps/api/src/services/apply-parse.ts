@@ -1,4 +1,5 @@
 import type { ParseBatch, ParseResult, Transaction } from "@moneyflow/shared";
+import { sqlite } from "../db/client.js";
 import {
   createCategory,
   createTransaction,
@@ -9,12 +10,11 @@ import {
 
 function resolveCategoryId(parsed: ParseResult): string | null {
   if (parsed.categoryName) {
-    const existing = findCategoryByName(parsed.categoryName, parsed.type);
+    const existing = findCategoryByName(parsed.categoryName);
     if (existing) return existing.id;
     if (parsed.createCategory) {
       const created = createCategory({
         name: parsed.createCategory.name,
-        type: parsed.createCategory.type,
         icon: parsed.createCategory.icon ?? "Circle",
         prompt: null,
       });
@@ -22,7 +22,6 @@ function resolveCategoryId(parsed: ParseResult): string | null {
     }
     const created = createCategory({
       name: parsed.categoryName,
-      type: parsed.type,
       icon: "Circle",
       prompt: null,
     });
@@ -30,14 +29,10 @@ function resolveCategoryId(parsed: ParseResult): string | null {
   }
 
   if (parsed.createCategory) {
-    const existing = findCategoryByName(
-      parsed.createCategory.name,
-      parsed.createCategory.type,
-    );
+    const existing = findCategoryByName(parsed.createCategory.name);
     if (existing) return existing.id;
     const created = createCategory({
       name: parsed.createCategory.name,
-      type: parsed.createCategory.type,
       icon: parsed.createCategory.icon ?? "Circle",
       prompt: null,
     });
@@ -77,24 +72,28 @@ export function applyParseBatch(
   batch: ParseBatch,
   opts: { source: "telegram" | "web"; rawText?: string | null },
 ) {
-  const s = getSettings();
-  const saved: Transaction[] = [];
-  const parses: ParseResult[] = [];
+  const runAtomic = sqlite.transaction(() => {
+    const s = getSettings();
+    const saved: Transaction[] = [];
+    const parses: ParseResult[] = [];
 
-  for (const item of batch.transactions) {
-    const result = applyParseResult(item, opts);
-    saved.push(result.transaction);
-    parses.push(result.parse);
-  }
+    for (const item of batch.transactions) {
+      const result = applyParseResult(item, opts);
+      saved.push(result.transaction);
+      parses.push(result.parse);
+    }
 
-  return {
-    kind: batch.kind,
-    transactions: saved,
-    /** First saved tx — convenience for single/receipt clients. */
-    transaction: saved[0]!,
-    balance: getBalance(),
-    settings: s,
-    parse: parses[0]!,
-    parses,
-  };
+    return {
+      kind: batch.kind,
+      transactions: saved,
+      /** First saved tx — convenience for single/receipt clients. */
+      transaction: saved[0]!,
+      balance: getBalance(),
+      settings: s,
+      parse: parses[0]!,
+      parses,
+    };
+  });
+
+  return runAtomic();
 }
