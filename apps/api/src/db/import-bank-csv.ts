@@ -232,7 +232,10 @@ function resolveCategoryId(
   return created.id;
 }
 
-export function importBankCsv(csvPath: string) {
+export function importBankCsv(
+  csvPath: string,
+  options: { clearAll?: boolean } = {},
+) {
   const absolutePath = path.resolve(csvPath);
   const content = fs.readFileSync(absolutePath, "utf8");
   const rows = parseCsv(content);
@@ -252,8 +255,11 @@ export function importBankCsv(csvPath: string) {
   };
 
   const cache = new Map<string, string>();
+  const clearExisting = options.clearAll ?? true;
 
-  sqlite.exec("DELETE FROM transactions;");
+  if (clearExisting) {
+    sqlite.exec("DELETE FROM transactions;");
+  }
 
   for (const row of rows) {
     const status = row[COL_STATUS]?.trim().toUpperCase();
