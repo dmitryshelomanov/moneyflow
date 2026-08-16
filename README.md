@@ -33,9 +33,23 @@ npm run dev:web
 
 Open: `http://localhost:5173/k/<ACCESS_KEY>/`
 
-In development (no Telegram widget) use the **Sign in (dev)** button.
+In development (without Telegram OAuth setup) use the **Sign in (dev)** button.
 
 `WEB_ORIGIN` is used in the bot `/start` greeting as the web link. On a VPS set it to your public URL, e.g. `https://money.example.com`.
+
+## Optional pre-commit guard
+
+To block accidental commits of `.db` files and secrets:
+
+```bash
+npm run hook:install
+```
+
+The hook checks staged files/diff and rejects commits containing:
+
+- database files (`*.db`, `*.sqlite`)
+- sensitive env files (`env.prod`, `.env*`, except examples)
+- likely secrets in added lines (tokens/keys/password-like assignments)
 
 ## Auth
 
@@ -50,7 +64,7 @@ Two layers: hidden URL + Telegram login (whitelist).
      ▼
   Login page
      │
-     ├─ Production: Telegram Login Widget
+     ├─ Production: Telegram OAuth button
      │     → POST /auth/telegram
      │     → hash check with bot token
      │     → id ∈ ALLOWED_TELEGRAM_IDS
@@ -67,17 +81,17 @@ Two layers: hidden URL + Telegram login (whitelist).
      missing cookie / foreign id → 401
 ```
 
-| Step         | What happens                                                              |
-| ------------ | ------------------------------------------------------------------------- |
-| 1. URL       | `ACCESS_KEY` must be in the path. One shared key for the whole project.   |
-| 2. Login     | Telegram proves identity (or dev-login locally).                          |
-| 3. Whitelist | Only `user_id`s from `ALLOWED_TELEGRAM_IDS` can enter.                    |
-| 4. Session   | Server sets a signed `mf_session` cookie.                                 |
-| 5. API       | No valid cookie → no data. Logout clears the cookie.                      |
+| Step         | What happens                                                            |
+| ------------ | ----------------------------------------------------------------------- |
+| 1. URL       | `ACCESS_KEY` must be in the path. One shared key for the whole project. |
+| 2. Login     | Telegram proves identity (or dev-login locally).                        |
+| 3. Whitelist | Only `user_id`s from `ALLOWED_TELEGRAM_IDS` can enter.                  |
+| 4. Session   | Server sets a signed `mf_session` cookie.                               |
+| 5. API       | No valid cookie → no data. Logout clears the cookie.                    |
 
 The bot uses the same whitelist: outsiders get “Access denied”.
 
-For Telegram Login on the web, set `VITE_TELEGRAM_BOT_USERNAME` (without `@`) and attach your domain to the Login Widget in [BotFather](https://t.me/BotFather).
+For Telegram Login on the web, set `VITE_TELEGRAM_BOT_ID` (numeric bot id) and attach your domain to login in [BotFather](https://t.me/BotFather).
 
 ## API
 
@@ -91,57 +105,60 @@ Almost every route (except login / me / logout) requires the `mf_session` cookie
 
 ### Ops
 
-| Method | Path      | Description                         |
-| ------ | --------- | ----------------------------------- |
-| `GET`  | `/health` | Healthcheck **without** access key  |
+| Method | Path      | Description                        |
+| ------ | --------- | ---------------------------------- |
+| `GET`  | `/health` | Healthcheck **without** access key |
 
 ### Auth
 
-| Method | Path                  | Auth            | Description                              |
-| ------ | --------------------- | --------------- | ---------------------------------------- |
-| `POST` | `/api/auth/telegram`  | —               | Sign in via Telegram Login Widget        |
-| `POST` | `/api/auth/dev-login` | —               | Dev sign-in (`NODE_ENV=development` only)|
-| `POST` | `/api/auth/logout`    | —               | Clear cookie                             |
-| `GET`  | `/api/auth/me`        | cookie optional | Current user or `null`                   |
+| Method | Path                  | Auth            | Description                               |
+| ------ | --------------------- | --------------- | ----------------------------------------- |
+| `POST` | `/api/auth/telegram`  | —               | Sign in via Telegram OAuth payload        |
+| `POST` | `/api/auth/dev-login` | —               | Dev sign-in (`NODE_ENV=development` only) |
+| `POST` | `/api/auth/logout`    | —               | Clear cookie                              |
+| `GET`  | `/api/auth/me`        | cookie optional | Current user or `null`                    |
 
 ### Settings
 
 | Method  | Path            | Description                                   |
 | ------- | --------------- | --------------------------------------------- |
 | `GET`   | `/api/settings` | Currency, opening balance, prompt, AI model   |
-| `PATCH` | `/api/settings` | Update settings                               |
+| `PATCH` | `/api/settings` | Update settings (incl. Telegram ID whitelist) |
 
 ### Categories
 
-| Method   | Path                    | Description                    |
-| -------- | ----------------------- | ------------------------------ |
-| `GET`    | `/api/categories?type=` | List (`expense` \| `income`)   |
-| `POST`   | `/api/categories`       | Create                         |
-| `PATCH`  | `/api/categories/:id`   | Update                         |
-| `DELETE` | `/api/categories/:id`   | Delete                         |
+| Method   | Path                  | Description         |
+| -------- | --------------------- | ------------------- |
+| `GET`    | `/api/categories`     | List all categories |
+| `POST`   | `/api/categories`     | Create              |
+| `PATCH`  | `/api/categories/:id` | Update              |
+| `DELETE` | `/api/categories/:id` | Delete              |
 
 ### Transactions
 
-| Method   | Path                    | Description                                                                                                              |
-| -------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `GET`    | `/api/transactions`     | Paginated list. Query: `from`, `to`, `type`, `categoryId`, `limit`, `cursor`; response `{ items, nextCursor, hasMore }` |
-| `GET`    | `/api/transactions/:id` | Single transaction                                                                                                       |
-| `POST`   | `/api/transactions`     | Create manually                                                                                                          |
-| `PATCH`  | `/api/transactions/:id` | Update                                                                                                                   |
-| `DELETE` | `/api/transactions/:id` | Delete                                                                                                                   |
+| Method   | Path                    | Description        |
+| -------- | ----------------------- | ------------------ |
+| `GET`    | `/api/transactions`     | Paginated list     |
+| `GET`    | `/api/transactions/:id` | Single transaction |
+| `POST`   | `/api/transactions`     | Create manually    |
+| `PATCH`  | `/api/transactions/:id` | Update             |
+| `DELETE` | `/api/transactions/:id` | Delete             |
+
+`GET /api/transactions` query params: `from`, `to`, `type`, `categoryId`, `q`, `limit`, `cursor`.  
+Response shape: `{ items, nextCursor, hasMore }`.
 
 ### Stats
 
-| Method | Path                                         | Description                                              |
-| ------ | -------------------------------------------- | -------------------------------------------------------- |
-| `GET`  | `/api/stats/summary?from&to`                 | Balance, period income/expense, category breakdown       |
-| `GET`  | `/api/stats/timeseries?from&to&granularity=` | Series: `day` \| `week` \| `month`                       |
+| Method | Path                                         | Description                                        |
+| ------ | -------------------------------------------- | -------------------------------------------------- |
+| `GET`  | `/api/stats/summary?from&to`                 | Balance, period income/expense, category breakdown |
+| `GET`  | `/api/stats/timeseries?from&to&granularity=` | Series: `day` \| `week` \| `month`                 |
 
 ### AI parse
 
-| Method | Path         | Description                                                                                                                       |
-| ------ | ------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| `POST` | `/api/parse` | Parse text and/or image. Body: `{ text?, imageBase64?, imageMime?, save? }`. `save: false` — JSON only, no write                  |
+| Method | Path         | Description                                                                                                      |
+| ------ | ------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `POST` | `/api/parse` | Parse text and/or image. Body: `{ text?, imageBase64?, imageMime?, save? }`. `save: false` — JSON only, no write |
 
 Route code: [`apps/api/src/routes/api.ts`](apps/api/src/routes/api.ts)
 
@@ -167,18 +184,18 @@ curl -b cookies.txt -X POST "$BASE/parse" \
 
 ## Env
 
-| Variable                     | Description                                                                   |
-| ---------------------------- | ----------------------------------------------------------------------------- |
-| `ACCESS_KEY`                 | Secret URL segment (see below)                                                |
-| `SESSION_SECRET`             | Cookie signing key (see below)                                                |
-| `TELEGRAM_BOT_TOKEN`         | Bot token                                                                     |
-| `ALLOWED_TELEGRAM_IDS`       | Comma-separated Telegram user id whitelist                                    |
-| `ROUTERAI_API_KEY`           | [RouterAI](https://routerai.ru/) key                                          |
-| `ROUTERAI_MODEL`             | Vision-capable model, e.g. `openai/gpt-4o`                                    |
-| `DATABASE_PATH`              | SQLite path                                                                   |
-| `PORT`                       | API port                                                                      |
-| `WEB_ORIGIN`                 | CORS origin + bot link (dev: `http://localhost:5173`, VPS by IP: `http://x.x.x.x`) |
-| `VITE_TELEGRAM_BOT_USERNAME` | Bot username without `@` for Login Widget (needs domain + HTTPS; unused on bare IP) |
+| Variable               | Description                                                                           |
+| ---------------------- | ------------------------------------------------------------------------------------- |
+| `ACCESS_KEY`           | Secret URL segment (see below)                                                        |
+| `SESSION_SECRET`       | Cookie signing key (see below)                                                        |
+| `TELEGRAM_BOT_TOKEN`   | Bot token                                                                             |
+| `ALLOWED_TELEGRAM_IDS` | Comma-separated Telegram user id whitelist                                            |
+| `ROUTERAI_API_KEY`     | [RouterAI](https://routerai.ru/) key                                                  |
+| `ROUTERAI_MODEL`       | Vision-capable model, e.g. `openai/gpt-4o`                                            |
+| `DATABASE_PATH`        | SQLite path                                                                           |
+| `PORT`                 | API port                                                                              |
+| `WEB_ORIGIN`           | CORS origin + bot link (dev: `http://localhost:5173`, VPS: `https://your.domain`)     |
+| `VITE_TELEGRAM_BOT_ID` | Numeric Telegram bot id for web OAuth login (needs domain + HTTPS; unused on bare IP) |
 
 ### What `ACCESS_KEY` and `SESSION_SECRET` do
 
@@ -208,58 +225,99 @@ openssl rand -hex 32   # SESSION_SECRET
 
 ## Deploy on a VPS
 
-Deployed via GitHub Actions: push to `main` → rsync to VPS → `docker compose up -d --build` (app + Caddy on **HTTP :80**, no TLS).
+Local script: online SQLite dump (unless skipped) → rsync over SSH → write `.env` on the server → remote preflight checks (`docker`, `docker compose`, TLS certs in `certs/`, path permissions) → `docker compose up -d --build --remove-orphans` → post-deploy verification (app + Caddy on **HTTPS :443**, HTTP fallback **:80**). Schema is created on app boot (`CREATE TABLE IF NOT EXISTS`).
 
-Public URL: `http://<SERVER_IP>/k/<ACCESS_KEY>/`  
-Healthcheck: `http://<SERVER_IP>/health`
+Public URL: `https://<DOMAIN>/k/<ACCESS_KEY>/`  
+Healthcheck: `https://<DOMAIN>/health`  
+HTTP fallback: `http://<SERVER_IP>/health`
 
 ### Once on the VPS
 
-1. Ubuntu/Debian, Docker + Compose plugin, port **80** open.
+1. Ubuntu/Debian, Docker + Compose plugin, host ports **443** (HTTPS) and **80** (HTTP fallback) open.
 2. Deploy user with an SSH key (public key in `~/.ssh/authorized_keys`).
-3. Directory, e.g. `/opt/moneyflow` (created by the workflow).
+3. Directory, e.g. `/opt/moneyflow` (created by the deploy script).
+4. TLS files at `/opt/moneyflow/certs/fullchain.pem` and `privkey.pem` (symlinks to your Let’s Encrypt live certs; not in git). Deploy requires these files.
 
-### GitHub Secrets
+### Local deploy config
 
-**Deploy**
+```bash
+cp env.prod.example env.prod
+# fill DEPLOY_* and app secrets (env.prod is gitignored)
+# put the private key at .deploy-keys/moneyflow_deploy (also gitignored)
 
-| Secret | Example |
-| ------ | ------- |
-| `DEPLOY_HOST` | Server IP |
-| `DEPLOY_USER` | `root` or `deploy` |
-| `DEPLOY_SSH_KEY` | Deploy private key |
-| `DEPLOY_PATH` | `/opt/moneyflow` |
+npm run deploy
+# or: ./scripts/deploy.sh
+```
 
-**App** (workflow writes `.env` on the server)
+| Variable                               | Example                                             |
+| -------------------------------------- | --------------------------------------------------- |
+| `DEPLOY_HOST`                          | Server IP                                           |
+| `DEPLOY_USER`                          | `deploy`                                            |
+| `DEPLOY_PATH`                          | `/opt/moneyflow`                                    |
+| `DEPLOY_SSH_KEY`                       | `.deploy-keys/moneyflow_deploy`                     |
+| `DEPLOY_SSH_PORT`                      | `22`                                                |
+| `WEB_ORIGIN`                           | `https://your.domain`                               |
+| `ACCESS_KEY`                           | yes (≥8)                                            |
+| `SESSION_SECRET`                       | yes (≥8)                                            |
+| `TELEGRAM_BOT_TOKEN`                   | for the bot                                         |
+| `ALLOWED_TELEGRAM_IDS`                 | whitelist                                           |
+| `VITE_TELEGRAM_BOT_ID`                 | optional on bare IP (web Telegram login won’t work) |
+| `ROUTERAI_API_KEY`                     | for AI                                              |
+| `ROUTERAI_BASE_URL` / `ROUTERAI_MODEL` | optional                                            |
 
-| Secret | Required |
-| ------ | -------- |
-| `WEB_ORIGIN` | `http://x.x.x.x` (same as public IP) |
-| `ACCESS_KEY` | yes (≥8) |
-| `SESSION_SECRET` | yes (≥8) |
-| `TELEGRAM_BOT_TOKEN` | for the bot |
-| `ALLOWED_TELEGRAM_IDS` | whitelist |
-| `VITE_TELEGRAM_BOT_USERNAME` | optional on bare IP (Login Widget won’t work) |
-| `ROUTERAI_API_KEY` | for AI |
-| `ROUTERAI_BASE_URL` / `ROUTERAI_MODEL` | optional |
+`NODE_ENV`, `PORT`, `DATABASE_PATH` are set by the script when uploading `.env`.
 
-`NODE_ENV`, `PORT`, `DATABASE_PATH` are set in compose/workflow.
+### Post-deploy checks
+
+After deploy, the script verifies:
+
+- `docker compose ps` output on the server
+- running `app` container state/image via `docker inspect`
+- internal app health from inside the container (`http://127.0.0.1:3000/health`)
+- external health endpoint from your machine (`$WEB_ORIGIN/health`) with retries
+
+### Database dump & restore
+
+Uses the same `env.prod` / `DEPLOY_*` SSH settings as deploy. Dumps are consistent online backups via `better-sqlite3` (safe while the app is running / under WAL).
+
+**Dump** (also runs automatically before each deploy unless `SKIP_PRE_DEPLOY_BACKUP=1`):
+
+```bash
+npm run db:dump
+# or: ./scripts/dump-db.sh
+```
+
+- Creates a remote temp backup, downloads it to `data/dumps/moneyflow-YYYYMMDD-HHMMSS.db`
+- Keeps the newest `KEEP_DUMPS` files (default `14`); set `LOCAL_DUMP_DIR` to change the folder
+
+**Restore** (replaces remote `data/moneyflow.db`):
+
+```bash
+npm run db:restore -- data/dumps/moneyflow-YYYYMMDD-HHMMSS.db
+# or: ./scripts/restore-db.sh /path/to/moneyflow-….db
+```
+
+1. Asks for confirmation (`YES`), or skip with `FORCE_RESTORE=1`
+2. Uploads the dump, backs up the current remote DB to `data/pre-restore-….db`
+3. Stops `app`, removes leftover `moneyflow.db-wal` / `.db-shm`, swaps the database file, starts `app` again and waits for health
+
+Dump/restore files under `data/` are local/remote ops artifacts — keep them out of git (the pre-commit hook rejects `*.db`).
 
 ### Auth without a domain
 
-| Channel | Works on bare IP? |
-| ------- | ----------------- |
-| Telegram bot (chat) | Yes |
-| Web Telegram Login Widget | No (needs hostname in BotFather + usually HTTPS) |
-| Dev-login | No in `NODE_ENV=production` |
+| Channel                  | Works on bare IP?                                |
+| ------------------------ | ------------------------------------------------ |
+| Telegram bot (chat)      | Yes                                              |
+| Web Telegram OAuth login | No (needs hostname in BotFather + usually HTTPS) |
+| Dev-login                | No in `NODE_ENV=production`                      |
 
-Use the **bot** until you have a domain and switch Caddy to TLS.
+Use the **bot** for auth on bare IP (cert may not match the IP hostname).
 
-### Locally without GitHub
+### Run compose on the server only
 
 ```bash
 cp .env.example .env
-# ACCESS_KEY, SESSION_SECRET, WEB_ORIGIN=http://x.x.x.x, …
+# ACCESS_KEY, SESSION_SECRET, WEB_ORIGIN=https://your.domain, …
 docker compose up -d --build
 ```
 
