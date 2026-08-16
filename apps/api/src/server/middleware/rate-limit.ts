@@ -16,6 +16,11 @@ type RateLimitOptions = {
 
 const store = new Map<string, RateLimitStoreEntry>();
 
+/** Clears in-memory counters — for tests only. */
+export function resetRateLimitStore() {
+  store.clear();
+}
+
 function clientIpFromHeaders(c: Parameters<MiddlewareHandler>[0]): string {
   const forwarded = c.req.header("x-forwarded-for");
   if (forwarded) {

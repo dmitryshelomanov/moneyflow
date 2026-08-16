@@ -16,6 +16,7 @@ import { createApp } from "./server/createApp.js";
 import { applyParseBatch } from "./services/apply-parse.js";
 import * as aiService from "./services/ai.js";
 import { listTransactionsPage } from "./services/money.js";
+import { resetRateLimitStore } from "./server/middleware/rate-limit.js";
 
 const app = createApp();
 const basePath = `/k/${env.ACCESS_KEY}/api`;
@@ -67,6 +68,7 @@ describe("API regression coverage", () => {
 
   beforeEach(() => {
     sqlite.exec("DELETE FROM transactions;");
+    resetRateLimitStore();
     vi.restoreAllMocks();
   });
 
