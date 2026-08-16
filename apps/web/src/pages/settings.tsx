@@ -492,6 +492,8 @@ export function SettingsPage() {
           </div>
         )}
       </GlassCard>
+
+      <p className="text-xs text-black/45">Версия {__APP_VERSION__}</p>
     </div>
   );
 }

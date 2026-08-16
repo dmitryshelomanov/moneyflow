@@ -1,7 +1,12 @@
+import fs from "node:fs";
 import path from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv } from "vite";
+
+const rootPkg = JSON.parse(
+  fs.readFileSync(path.resolve(__dirname, "../../package.json"), "utf8"),
+) as { version: string };
 
 function trailingSlashBaseCompat(basePath: string) {
   const baseNoSlash =
@@ -62,6 +67,9 @@ export default defineConfig(({ mode }) => {
       alias: {
         "@": path.resolve(__dirname, "./src"),
       },
+    },
+    define: {
+      __APP_VERSION__: JSON.stringify(rootPkg.version),
     },
     base: basePath,
     server: {
