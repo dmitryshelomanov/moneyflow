@@ -15,6 +15,12 @@ export function registerAdviceRoutes(
   router: Hono<{ Variables: ApiVariables }>,
 ) {
   router.post("/advice/savings", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === null) return badRequest(c, "Invalid JSON body");
+
+    const validated = validateBody(c, SavingsAdviceRequestSchema, body);
+    if (!validated.ok) return validated.response;
+
     if (!env.ROUTERAI_API_KEY) {
       return c.json(
         {
@@ -24,12 +30,6 @@ export function registerAdviceRoutes(
         503,
       );
     }
-
-    const body = await readJsonBody(c);
-    if (body === null) return badRequest(c, "Invalid JSON body");
-
-    const validated = validateBody(c, SavingsAdviceRequestSchema, body);
-    if (!validated.ok) return validated.response;
 
     try {
       const advice = await buildSavingsAdvice({
@@ -51,6 +51,12 @@ export function registerAdviceRoutes(
   });
 
   router.post("/advice/pulse", async (c) => {
+    const body = await readJsonBody(c);
+    if (body === null) return badRequest(c, "Invalid JSON body");
+
+    const validated = validateBody(c, FinancePulseRequestSchema, body);
+    if (!validated.ok) return validated.response;
+
     if (!env.ROUTERAI_API_KEY) {
       return c.json(
         {
@@ -60,12 +66,6 @@ export function registerAdviceRoutes(
         503,
       );
     }
-
-    const body = await readJsonBody(c);
-    if (body === null) return badRequest(c, "Invalid JSON body");
-
-    const validated = validateBody(c, FinancePulseRequestSchema, body);
-    if (!validated.ok) return validated.response;
 
     try {
       const pulse = await buildFinancePulse({
