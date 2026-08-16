@@ -20,11 +20,7 @@ type PeriodContextValue = {
 const PeriodContext = createContext<PeriodContextValue | null>(null);
 
 function defaultPeriodRange(): PeriodRange {
-  const defaults = periodDefaults();
-  return {
-    from: defaults.from.slice(0, 10),
-    to: defaults.to.slice(0, 10),
-  };
+  return periodDefaults();
 }
 
 export function PeriodProvider({ children }: PropsWithChildren) {

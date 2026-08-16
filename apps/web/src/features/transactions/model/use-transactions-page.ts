@@ -57,12 +57,6 @@ type BulkUpdateInput = {
   accountId?: string;
 };
 
-const ISO_DATE_LENGTH = 10;
-
-function toYmd(iso: string) {
-  return iso.slice(0, ISO_DATE_LENGTH);
-}
-
 function normalizeSearchQuery(value: string | null) {
   return value?.trim() ?? "";
 }
@@ -77,8 +71,8 @@ function resolveInitialPeriod({
   defaults,
 }: InitialPeriodParams) {
   return {
-    from: fromParam ?? toYmd(defaults.from),
-    to: toParam ?? toYmd(defaults.to),
+    from: fromParam ?? defaults.from,
+    to: toParam ?? defaults.to,
   };
 }
 
