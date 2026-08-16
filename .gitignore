@@ -10,6 +10,7 @@ dist-ssr/
 
 # Local data & SQLite
 data/
+certs/
 *.db
 *.db-*
 *.sqlite
@@ -19,6 +20,8 @@ data/
 .env
 .env.*
 !.env.example
+env.prod
+.deploy-keys/
 
 # Logs
 logs/

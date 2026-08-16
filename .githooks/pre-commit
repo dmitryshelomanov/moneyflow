@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+blocked_paths=()
+while IFS= read -r file; do
+  [[ -z "$file" ]] && continue
+  if [[ "$file" == ".env.example" || "$file" == "env.prod.example" ]]; then
+    continue
+  fi
+  if [[ "$file" =~ (^|/)\.env(\..*)?$ ]] || [[ "$file" =~ (^|/)env\.prod$ ]]; then
+    blocked_paths+=("$file")
+    continue
+  fi
+  if [[ "$file" =~ \.db($|-) ]] || [[ "$file" =~ \.sqlite($|-) ]]; then
+    blocked_paths+=("$file")
+  fi
+done < <(git diff --cached --name-only --diff-filter=ACMR)
+
+if [[ "${#blocked_paths[@]}" -gt 0 ]]; then
+  echo "pre-commit blocked: staged sensitive files detected" >&2
+  for path in "${blocked_paths[@]}"; do
+    echo "  - $path" >&2
+  done
+  echo "Unstage/remove these files before commit." >&2
+  exit 1
+fi
+
+added_lines="$(git diff --cached --unified=0 --no-color | awk '/^\+[^+]/ { print substr($0, 2) }')"
+
+if [[ -n "$added_lines" ]]; then
+  suspicious_lines="$(printf '%s\n' "$added_lines" | grep -nE '(^|[[:space:]])(TELEGRAM_BOT_TOKEN|ROUTERAI_API_KEY|SESSION_SECRET|ACCESS_KEY|OPENAI_API_KEY|API_KEY|PASSWORD|SECRET|TOKEN)[[:space:]]*[:=][[:space:]]*[^[:space:]]+' || true)"
+  if [[ -n "$suspicious_lines" ]]; then
+    filtered="$(printf '%s\n' "$suspicious_lines" | grep -Evi '(change-me|your\.domain|your\.server|example|placeholder|^\s*#|""|'\'''\'')' || true)"
+    if [[ -n "$filtered" ]]; then
+      echo "pre-commit blocked: possible secrets found in staged changes" >&2
+      printf '%s\n' "$filtered" | sed 's/^/  /' >&2
+      echo "Remove/rotate secrets or move them to env files excluded from git." >&2
+      exit 1
+    fi
+  fi
+fi
+
+exit 0
