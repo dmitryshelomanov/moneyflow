@@ -1,0 +1,10 @@
+:443 {
+	tls /certs/fullchain.pem /certs/privkey.pem
+	encode gzip
+	reverse_proxy app:3000
+}
+
+:80 {
+	encode gzip
+	reverse_proxy app:3000
+}

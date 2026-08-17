@@ -18,6 +18,63 @@ Demo DB only (fictional amounts and merchants, no personal data).
 - `apps/web` — React + Vite + Tailwind + Recharts (glass UI)
 - `packages/shared` — Zod schemas
 
+## Self-host (VPS)
+
+One-liner on a Debian/Ubuntu VPS (root). The script installs Docker if needed, writes `/opt/moneyflow`, pulls `ghcr.io/dmitryshelomanov/moneyflow`, and starts the app plus Caddy.
+
+```bash
+bash <(curl -Ls https://raw.githubusercontent.com/dmitryshelomanov/moneyflow/main/install.sh)
+```
+
+Read the script before running it. The GHCR package must be **public** or `docker pull` will fail.
+
+### What you need
+
+- Debian or Ubuntu, root (`sudo`)
+- Ports **80** and **443** open (firewall / security group)
+- Optional: [Telegram bot token](https://t.me/BotFather), your numeric Telegram user id, [RouterAI](https://routerai.ru/) key
+- For HTTPS: your own TLS files (see below). The installer does **not** issue certificates.
+
+The script prompts for domain (or IP), bot token, allowed Telegram ids, RouterAI key. `ACCESS_KEY` and `SESSION_SECRET` are generated unless you set them.
+
+After install with a domain, attach that hostname to the bot in BotFather if you want **web** Telegram login. The bot in chat works without a domain.
+
+### Certificates
+
+Put them here yourself (Let’s Encrypt via certbot, Cloudflare origin cert, whatever you use):
+
+```text
+/opt/moneyflow/certs/fullchain.pem
+/opt/moneyflow/certs/privkey.pem
+```
+
+Symlinks to `/etc/letsencrypt/live/<domain>/` work. If these files are missing, Caddy listens on **:80 only**. After you drop the files in, run `/opt/moneyflow/install.sh update` to enable HTTPS.
+
+Bare IP → HTTP only, no Telegram web OAuth.
+
+### What lives where
+
+The image is only the app. Secrets, the database, and TLS files stay on the host:
+
+| Path                    | Contents                                            |
+| ----------------------- | --------------------------------------------------- |
+| `/opt/moneyflow/.env`   | tokens, `ACCESS_KEY`, `SESSION_SECRET`              |
+| `/opt/moneyflow/data/`  | SQLite (`moneyflow.db`)                             |
+| `/opt/moneyflow/certs/` | `fullchain.pem` + `privkey.pem` (you provide these) |
+
+Dashboard URL is printed at the end: `https://<domain>/k/<ACCESS_KEY>/` (or `http://<ip>/k/<ACCESS_KEY>/`).
+
+### Later
+
+```bash
+/opt/moneyflow/install.sh update
+/opt/moneyflow/install.sh reconfigure
+/opt/moneyflow/install.sh uninstall          # stop containers, keep SQLite and certs
+/opt/moneyflow/install.sh uninstall --purge  # also delete /opt/moneyflow
+```
+
+Pin a release with `GITHUB_REF=v0.1.0`. Existing `npm run deploy` (rsync from your laptop, same `certs/` layout) is unchanged; see [Deploy on a VPS](#deploy-on-a-vps).
+
 ## Quick start
 
 ```bash
@@ -91,7 +148,7 @@ Two layers: hidden URL + Telegram login (whitelist).
 
 The bot uses the same whitelist: outsiders get “Access denied”.
 
-For Telegram Login on the web, set `VITE_TELEGRAM_BOT_ID` (numeric bot id) and attach your domain to login in [BotFather](https://t.me/BotFather).
+For Telegram Login on the web, production derives the numeric bot id from `TELEGRAM_BOT_TOKEN` (or `TELEGRAM_BOT_ID`). Attach your domain to login in [BotFather](https://t.me/BotFather). Local Vite still uses `VITE_TELEGRAM_BOT_ID`.
 
 ## API
 
@@ -184,18 +241,19 @@ curl -b cookies.txt -X POST "$BASE/parse" \
 
 ## Env
 
-| Variable               | Description                                                                           |
-| ---------------------- | ------------------------------------------------------------------------------------- |
-| `ACCESS_KEY`           | Secret URL segment (see below)                                                        |
-| `SESSION_SECRET`       | Cookie signing key (see below)                                                        |
-| `TELEGRAM_BOT_TOKEN`   | Bot token                                                                             |
-| `ALLOWED_TELEGRAM_IDS` | Comma-separated Telegram user id whitelist                                            |
-| `ROUTERAI_API_KEY`     | [RouterAI](https://routerai.ru/) key                                                  |
-| `ROUTERAI_MODEL`       | Vision-capable model, e.g. `openai/gpt-4o`                                            |
-| `DATABASE_PATH`        | SQLite path                                                                           |
-| `PORT`                 | API port                                                                              |
-| `WEB_ORIGIN`           | CORS origin + bot link (dev: `http://localhost:5173`, VPS: `https://your.domain`)     |
-| `VITE_TELEGRAM_BOT_ID` | Numeric Telegram bot id for web OAuth login (needs domain + HTTPS; unused on bare IP) |
+| Variable               | Description                                                                       |
+| ---------------------- | --------------------------------------------------------------------------------- |
+| `ACCESS_KEY`           | Secret URL segment (see below)                                                    |
+| `SESSION_SECRET`       | Cookie signing key (see below)                                                    |
+| `TELEGRAM_BOT_TOKEN`   | Bot token (production also derives the numeric bot id from it)                    |
+| `TELEGRAM_BOT_ID`      | Optional numeric bot id override for web OAuth                                    |
+| `ALLOWED_TELEGRAM_IDS` | Comma-separated Telegram user id whitelist                                        |
+| `ROUTERAI_API_KEY`     | [RouterAI](https://routerai.ru/) key                                              |
+| `ROUTERAI_MODEL`       | Vision-capable model, e.g. `openai/gpt-4o`                                        |
+| `DATABASE_PATH`        | SQLite path                                                                       |
+| `PORT`                 | API port                                                                          |
+| `WEB_ORIGIN`           | CORS origin + bot link (dev: `http://localhost:5173`, VPS: `https://your.domain`) |
+| `VITE_TELEGRAM_BOT_ID` | Dev-only bot id for Vite; production uses `TELEGRAM_BOT_ID` / token               |
 
 ### What `ACCESS_KEY` and `SESSION_SECRET` do
 
@@ -249,21 +307,22 @@ npm run deploy
 # or: ./scripts/deploy.sh
 ```
 
-| Variable                               | Example                                             |
-| -------------------------------------- | --------------------------------------------------- |
-| `DEPLOY_HOST`                          | Server IP                                           |
-| `DEPLOY_USER`                          | `deploy`                                            |
-| `DEPLOY_PATH`                          | `/opt/moneyflow`                                    |
-| `DEPLOY_SSH_KEY`                       | `.deploy-keys/moneyflow_deploy`                     |
-| `DEPLOY_SSH_PORT`                      | `22`                                                |
-| `WEB_ORIGIN`                           | `https://your.domain`                               |
-| `ACCESS_KEY`                           | yes (≥8)                                            |
-| `SESSION_SECRET`                       | yes (≥8)                                            |
-| `TELEGRAM_BOT_TOKEN`                   | for the bot                                         |
-| `ALLOWED_TELEGRAM_IDS`                 | whitelist                                           |
-| `VITE_TELEGRAM_BOT_ID`                 | optional on bare IP (web Telegram login won’t work) |
-| `ROUTERAI_API_KEY`                     | for AI                                              |
-| `ROUTERAI_BASE_URL` / `ROUTERAI_MODEL` | optional                                            |
+| Variable                               | Example                                        |
+| -------------------------------------- | ---------------------------------------------- |
+| `DEPLOY_HOST`                          | Server IP                                      |
+| `DEPLOY_USER`                          | `deploy`                                       |
+| `DEPLOY_PATH`                          | `/opt/moneyflow`                               |
+| `DEPLOY_SSH_KEY`                       | `.deploy-keys/moneyflow_deploy`                |
+| `DEPLOY_SSH_PORT`                      | `22`                                           |
+| `WEB_ORIGIN`                           | `https://your.domain`                          |
+| `ACCESS_KEY`                           | yes (≥8)                                       |
+| `SESSION_SECRET`                       | yes (≥8)                                       |
+| `TELEGRAM_BOT_TOKEN`                   | for the bot                                    |
+| `ALLOWED_TELEGRAM_IDS`                 | whitelist                                      |
+| `TELEGRAM_BOT_ID`                      | optional; otherwise derived from the bot token |
+| `VITE_TELEGRAM_BOT_ID`                 | optional; still accepted as a fallback         |
+| `ROUTERAI_API_KEY`                     | for AI                                         |
+| `ROUTERAI_BASE_URL` / `ROUTERAI_MODEL` | optional                                       |
 
 `NODE_ENV`, `PORT`, `DATABASE_PATH` are set by the script when uploading `.env`.
 
@@ -315,11 +374,15 @@ Use the **bot** for auth on bare IP (cert may not match the IP hostname).
 
 ### Run compose on the server only
 
+From a git checkout (builds the image locally; `ACCESS_KEY` is a runtime env, not a build-arg):
+
 ```bash
 cp .env.example .env
 # ACCESS_KEY, SESSION_SECRET, WEB_ORIGIN=https://your.domain, …
 docker compose up -d --build
 ```
+
+Or pull the published image with [deploy/docker-compose.yml](deploy/docker-compose.yml) (this is what `install.sh` uses).
 
 Manual start without Docker:
 

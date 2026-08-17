@@ -26,3 +26,58 @@ jobs:
 
       - name: Test
         run: npm run test
+
+  docker:
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Decide push
+        id: decide
+        run: |
+          if [ "$EVENT" != "pull_request" ] && { [ "$REF" = "refs/heads/main" ] || [[ "$REF" == refs/tags/* ]]; }; then
+            echo "push=true" >> "$GITHUB_OUTPUT"
+            echo "platforms=linux/amd64,linux/arm64" >> "$GITHUB_OUTPUT"
+          else
+            echo "push=false" >> "$GITHUB_OUTPUT"
+            echo "platforms=linux/amd64" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+
+      - uses: docker/setup-qemu-action@v3
+        if: steps.decide.outputs.push == 'true'
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        if: steps.decide.outputs.push == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=sha-
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ steps.decide.outputs.platforms }}
+          push: ${{ steps.decide.outputs.push == 'true' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
