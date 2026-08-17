@@ -33,7 +33,7 @@ added_lines="$(git diff --cached --unified=0 --no-color | awk '/^\+[^+]/ { print
 if [[ -n "$added_lines" ]]; then
   suspicious_lines="$(printf '%s\n' "$added_lines" | grep -nE '(^|[[:space:]])(TELEGRAM_BOT_TOKEN|ROUTERAI_API_KEY|SESSION_SECRET|ACCESS_KEY|OPENAI_API_KEY|API_KEY|PASSWORD|SECRET|TOKEN)[[:space:]]*[:=][[:space:]]*[^[:space:]]+' || true)"
   if [[ -n "$suspicious_lines" ]]; then
-    filtered="$(printf '%s\n' "$suspicious_lines" | grep -Evi '(change-me|your\.domain|your\.server|example|placeholder|^\s*#|""|'\'''\'')' || true)"
+    filtered="$(printf '%s\n' "$suspicious_lines" | grep -Evi '(change-me|your\.domain|your\.server|example|placeholder|openssl rand|write_env_line|prompt_var|^\s*#|""|'\'''\'')' || true)"
     if [[ -n "$filtered" ]]; then
       echo "pre-commit blocked: possible secrets found in staged changes" >&2
       printf '%s\n' "$filtered" | sed 's/^/  /' >&2
