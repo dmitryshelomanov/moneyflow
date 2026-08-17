@@ -2,9 +2,6 @@ services:
   app:
     build:
       context: .
-      args:
-        ACCESS_KEY: ${ACCESS_KEY}
-        VITE_TELEGRAM_BOT_ID: ${VITE_TELEGRAM_BOT_ID:-}
     env_file: .env
     environment:
       NODE_ENV: production

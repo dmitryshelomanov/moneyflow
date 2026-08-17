@@ -17,13 +17,8 @@ RUN npm ci
 
 COPY . .
 
-ARG ACCESS_KEY
-ARG VITE_TELEGRAM_BOT_ID=
-ENV ACCESS_KEY=$ACCESS_KEY
-ENV VITE_TELEGRAM_BOT_ID=$VITE_TELEGRAM_BOT_ID
 ENV NODE_ENV=production
 
-RUN test -n "$ACCESS_KEY" || (echo "ACCESS_KEY build-arg is required" && exit 1)
 RUN npm run build
 
 FROM node:22.13.0-bookworm-slim AS runner

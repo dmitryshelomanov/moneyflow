@@ -4,6 +4,7 @@ import { Navigate } from "react-router-dom";
 import { TelegramAuthSchema, type TelegramAuth } from "@moneyflow/shared";
 import { sessionApi } from "@/entities/session/api/session-api";
 import { useAuth } from "@/features/auth/model/auth-context";
+import { getTelegramBotId, themeAsset } from "@/shared/lib/runtime-config";
 import { Button } from "@/shared/ui/button";
 import { GlassCard } from "@/shared/ui/glass-card";
 
@@ -69,9 +70,9 @@ function parseTelegramAuthFromLocation(): TelegramAuth | null {
 export function LoginPage() {
   const { user, loading, refresh } = useAuth();
   const [error, setError] = useState<string | null>(null);
-  const jakeBg = `${import.meta.env.BASE_URL}theme/jake.png`;
-  const finnBg = `${import.meta.env.BASE_URL}theme/finn.png`;
-  const botId = import.meta.env.VITE_TELEGRAM_BOT_ID as string | undefined;
+  const jakeBg = themeAsset("jake.png");
+  const finnBg = themeAsset("finn.png");
+  const botId = getTelegramBotId();
 
   const telegramAuthMutation = useMutation({
     mutationFn: (payload: TelegramAuth) => sessionApi.telegramAuth(payload),
@@ -168,7 +169,7 @@ export function LoginPage() {
           <div className="space-y-3">
             <p className="text-sm text-black/60">
               Dev-вход (без Telegram widget). Для production задай
-              VITE_TELEGRAM_BOT_ID.
+              TELEGRAM_BOT_TOKEN (bot id берётся из токена).
             </p>
             <Button
               className="w-full"

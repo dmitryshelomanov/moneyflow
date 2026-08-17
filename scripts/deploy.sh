@@ -98,6 +98,7 @@ rsync -az --delete \
   write_env_line WEB_ORIGIN "$WEB_ORIGIN"
   write_env_line TELEGRAM_BOT_TOKEN "${TELEGRAM_BOT_TOKEN:-}"
   write_env_line ALLOWED_TELEGRAM_IDS "${ALLOWED_TELEGRAM_IDS:-}"
+  write_env_line TELEGRAM_BOT_ID "${TELEGRAM_BOT_ID:-${VITE_TELEGRAM_BOT_ID:-}}"
   write_env_line VITE_TELEGRAM_BOT_ID "${VITE_TELEGRAM_BOT_ID:-}"
   write_env_line ROUTERAI_API_KEY "${ROUTERAI_API_KEY:-}"
   write_env_line ROUTERAI_BASE_URL "${ROUTERAI_BASE_URL:-https://routerai.ru/api/v1}"

@@ -10,9 +10,16 @@ const root = path.resolve(
 config({ path: path.join(root, ".env") });
 config({ path: path.join(process.cwd(), ".env") });
 
+function telegramBotIdFromToken(token: string): string {
+  const id = token.split(":")[0] ?? "";
+  return /^\d+$/.test(id) ? id : "";
+}
+
 const EnvSchema = z.object({
   ACCESS_KEY: z.string().min(8),
   TELEGRAM_BOT_TOKEN: z.string().optional().default(""),
+  TELEGRAM_BOT_ID: z.string().optional().default(""),
+  VITE_TELEGRAM_BOT_ID: z.string().optional().default(""),
   ALLOWED_TELEGRAM_IDS: z.string().optional().default(""),
   ROUTERAI_API_KEY: z.string().optional().default(""),
   ROUTERAI_BASE_URL: z.string().url().default("https://routerai.ru/api/v1"),
@@ -36,6 +43,10 @@ if (!parsed.success) {
 const raw = parsed.data;
 export const env = {
   ...raw,
+  telegramBotId:
+    raw.TELEGRAM_BOT_ID ||
+    raw.VITE_TELEGRAM_BOT_ID ||
+    telegramBotIdFromToken(raw.TELEGRAM_BOT_TOKEN),
   DATABASE_PATH:
     raw.DATABASE_PATH === ":memory:" || path.isAbsolute(raw.DATABASE_PATH)
       ? raw.DATABASE_PATH

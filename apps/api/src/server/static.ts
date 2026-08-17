@@ -58,6 +58,43 @@ function tryReadStaticFile(
   };
 }
 
+function escapeHtmlAttr(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+export function injectRuntimeHtml(
+  html: string,
+  options: { accessKey: string; telegramBotId: string },
+): string {
+  const baseHref = `/k/${options.accessKey}/`;
+  const config = JSON.stringify({
+    telegramBotId: options.telegramBotId || undefined,
+  });
+  const inject = `<base href="${escapeHtmlAttr(baseHref)}"><script>window.__MF_CONFIG__=${config};</script>`;
+  if (html.includes("<head>")) {
+    return html.replace("<head>", `<head>${inject}`);
+  }
+  return `${inject}${html}`;
+}
+
+let cachedIndexHtml: string | null = null;
+
+function getIndexHtml(): string {
+  if (!cachedIndexHtml) {
+    const raw = fs.readFileSync(path.join(webDistRoot, "index.html"), "utf8");
+    cachedIndexHtml = injectRuntimeHtml(raw, {
+      accessKey: env.ACCESS_KEY,
+      telegramBotId: env.telegramBotId,
+    });
+  }
+  return cachedIndexHtml;
+}
+
 export function registerProductionStaticRoutes(router: Hono): void {
   if (env.NODE_ENV !== "production" || !fs.existsSync(webDistRoot)) {
     return;
@@ -72,12 +109,14 @@ export function registerProductionStaticRoutes(router: Hono): void {
 
     const staticFile = tryReadStaticFile(candidatePath);
     if (staticFile) {
+      if (staticFile.type.startsWith("text/html")) {
+        return c.html(getIndexHtml());
+      }
       return c.body(new Uint8Array(staticFile.body), 200, {
         "Content-Type": staticFile.type,
       });
     }
 
-    const html = fs.readFileSync(path.join(webDistRoot, "index.html"), "utf8");
-    return c.html(html);
+    return c.html(getIndexHtml());
   });
 }

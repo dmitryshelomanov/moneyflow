@@ -11,6 +11,7 @@ import { useAuth } from "@/features/auth/model/auth-context";
 import { Button } from "@/shared/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/shared/ui/popover";
 import { cn } from "@/shared/lib/cn";
+import { themeAsset } from "@/shared/lib/runtime-config";
 
 const links = [
   { to: "/", label: "Обзор", icon: LayoutDashboard, end: true },
@@ -54,8 +55,8 @@ function NavItems({
 export function AppShell() {
   const { user, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
-  const jakeBg = `${import.meta.env.BASE_URL}theme/jake.png`;
-  const finnBg = `${import.meta.env.BASE_URL}theme/finn.png`;
+  const jakeBg = themeAsset("jake.png");
+  const finnBg = themeAsset("finn.png");
 
   return (
     <div className="relative min-h-screen overflow-hidden">

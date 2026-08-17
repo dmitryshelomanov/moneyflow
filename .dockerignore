@@ -8,6 +8,10 @@ data
 .env
 .env.*
 !.env.example
+env.prod
+env.prod.example
+.deploy-keys
+certs
 dist
 **/dist
 coverage

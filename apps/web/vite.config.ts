@@ -55,14 +55,15 @@ function trailingSlashBaseCompat(basePath: string) {
   };
 }
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ command, mode }) => {
   const env = loadEnv(mode, path.resolve(__dirname, "../.."), "");
   const accessKey = env.ACCESS_KEY || "dev-access-key";
   const apiPort = env.PORT || "3000";
-  const basePath = `/k/${accessKey}/`;
+  const devBasePath = `/k/${accessKey}/`;
+  const basePath = command === "build" ? "./" : devBasePath;
 
   return {
-    plugins: [react(), tailwindcss(), trailingSlashBaseCompat(basePath)],
+    plugins: [react(), tailwindcss(), trailingSlashBaseCompat(devBasePath)],
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),
