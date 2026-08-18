@@ -18,7 +18,6 @@ import {
 } from "@moneyflow/shared";
 import {
   fillKeys,
-  formatAxisMoney,
   formatChartFullLabel,
   formatChartLabel,
   keyPrefixLength,
@@ -30,7 +29,6 @@ import {
   CHART,
   CHART_GRID,
   CHART_TOOLTIP_CLASS,
-  CHART_Y_AXIS,
 } from "@/widgets/charts/chart-theme";
 
 const EXPENSE = CHART.expense;
@@ -391,7 +389,7 @@ export function CashflowChart({
                 data={data}
                 barGap={4}
                 barCategoryGap={isSingleBucket ? "58%" : "22%"}
-                margin={{ top: 8, right: 8, left: 8, bottom: 0 }}
+                margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
                 style={{ cursor: "pointer" }}
                 onClick={(state) => {
                   const row = state?.activePayload?.[0]?.payload as
@@ -502,14 +500,7 @@ export function CashflowChart({
                     );
                   }}
                 />
-                <YAxis
-                  {...CHART_Y_AXIS}
-                  tickFormatter={(value: number) =>
-                    mode === "percent"
-                      ? `${Math.round(value)}%`
-                      : formatAxisMoney(value, currency)
-                  }
-                />
+                <YAxis hide />
                 <Tooltip
                   cursor={{ fill: "rgba(148,163,184,0.12)", radius: 6 }}
                   content={<ChartTooltip currency={currency} mode={mode} />}

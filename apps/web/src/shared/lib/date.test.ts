@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatPeriodRangeLabel,
+  inclusiveMonthSpan,
   parseYmd,
   periodDefaults,
   previousPeriodYmdRange,
@@ -42,5 +44,29 @@ describe("date utilities", () => {
       from: "2026-08-07",
       to: "2026-08-09",
     });
+  });
+
+  it("counts inclusive calendar months in a range", () => {
+    expect(
+      inclusiveMonthSpan(parseYmd("2026-08-01"), parseYmd("2026-08-18")),
+    ).toBe(1);
+    expect(
+      inclusiveMonthSpan(parseYmd("2025-09-01"), parseYmd("2026-08-18")),
+    ).toBe(12);
+    expect(
+      inclusiveMonthSpan(parseYmd("2025-02-01"), parseYmd("2026-08-18")),
+    ).toBe(19);
+  });
+
+  it("appends month count to period label when range is longer than a year", () => {
+    expect(
+      formatPeriodRangeLabel(parseYmd("2026-08-01"), parseYmd("2026-08-18")),
+    ).toBe("1 авг. 2026 — 18 авг. 2026");
+    expect(
+      formatPeriodRangeLabel(parseYmd("2025-09-01"), parseYmd("2026-08-18")),
+    ).toBe("1 сент. 2025 — 18 авг. 2026");
+    expect(
+      formatPeriodRangeLabel(parseYmd("2025-02-01"), parseYmd("2026-08-18")),
+    ).toBe("1 фев. 2025 — 18 авг. 2026 · 19 мес");
   });
 });

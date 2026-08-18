@@ -129,27 +129,59 @@ export function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-4 md:gap-6">
-      <DateRangePicker
-        from={state.from}
-        to={state.to}
-        allTimeFrom={state.allTimeFrom}
-        large
-        onChange={({ from: nextFrom, to: nextTo }) => {
-          actions.setPeriod({ from: nextFrom, to: nextTo });
-        }}
-      />
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <button
-          type="button"
-          className="flex h-11 w-full items-center justify-between rounded-2xl border-2 border-black/90 bg-[#fffdf5] px-4 text-sm text-black shadow-[0_3px_0_rgba(0,0,0,0.8)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/30 sm:w-auto sm:min-w-[12rem]"
-          onClick={() => setAccountOpen(true)}
-        >
-          <span className="truncate">{selectedAccountName}</span>
-          <ChevronDown className="h-4 w-4 shrink-0 text-black/60" />
-        </button>
-        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <DateRangePicker
+            from={state.from}
+            to={state.to}
+            allTimeFrom={state.allTimeFrom}
+            onChange={({ from: nextFrom, to: nextTo }) => {
+              actions.setPeriod({ from: nextFrom, to: nextTo });
+            }}
+          />
+          <button
+            type="button"
+            className="flex h-11 min-w-0 max-w-full items-center justify-between gap-2 rounded-2xl border-2 border-black/90 bg-[#fffdf5] px-4 text-sm text-black shadow-[0_3px_0_rgba(0,0,0,0.8)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/30 sm:max-w-[16rem]"
+            onClick={() => setAccountOpen(true)}
+          >
+            <span className="truncate">{selectedAccountName}</span>
+            <ChevronDown className="h-4 w-4 shrink-0 text-black/60" />
+          </button>
+          {state.isLongRange ? (
+            <div
+              role="group"
+              aria-label="Группировка"
+              className="flex h-11 items-center rounded-2xl border-2 border-black/90 bg-[#fffdf5] p-1 shadow-[0_3px_0_rgba(0,0,0,0.8)]"
+            >
+              <button
+                type="button"
+                className={cn(
+                  "h-full rounded-xl px-3 text-xs font-semibold transition",
+                  state.longRangeGranularity === "year"
+                    ? "bg-[#5bd7d3] text-black"
+                    : "text-black/55 hover:text-black",
+                )}
+                onClick={() => actions.setLongRangeGranularity("year")}
+              >
+                По годам
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  "h-full rounded-xl px-3 text-xs font-semibold transition",
+                  state.longRangeGranularity === "month"
+                    ? "bg-[#5bd7d3] text-black"
+                    : "text-black/55 hover:text-black",
+                )}
+                onClick={() => actions.setLongRangeGranularity("month")}
+              >
+                По месяцам
+              </button>
+            </div>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap gap-2 lg:justify-end">
           <Button
-            className="w-full sm:w-auto"
             size="sm"
             variant="default"
             disabled={state.accounts.length === 0}
@@ -161,7 +193,6 @@ export function DashboardPage() {
             Быстрая запись
           </Button>
           <Button
-            className="w-full sm:w-auto"
             size="sm"
             variant="default"
             disabled={!state.summary || aiPulse.isPending}
@@ -179,7 +210,6 @@ export function DashboardPage() {
             {aiPulse.isPending ? "Смотрю..." : "Как дела?"}
           </Button>
           <Button
-            className="w-full sm:w-auto"
             size="sm"
             variant="secondary"
             disabled={!state.summary || aiSavings.isPending}
@@ -197,12 +227,7 @@ export function DashboardPage() {
           >
             {aiSavings.isPending ? "Ищу варианты..." : "Где сэкономить?"}
           </Button>
-          <Button
-            className="w-full sm:w-auto"
-            size="sm"
-            variant="ghost"
-            onClick={exportCsv}
-          >
+          <Button size="sm" variant="ghost" onClick={exportCsv}>
             Экспорт CSV
           </Button>
         </div>
@@ -242,31 +267,6 @@ export function DashboardPage() {
           </Button>
         </GlassCard>
       )}
-      {state.isLongRange ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs font-medium uppercase tracking-[0.14em] text-black/50">
-            Группировка
-          </span>
-          <Button
-            size="sm"
-            variant={
-              state.longRangeGranularity === "year" ? "secondary" : "ghost"
-            }
-            onClick={() => actions.setLongRangeGranularity("year")}
-          >
-            По годам
-          </Button>
-          <Button
-            size="sm"
-            variant={
-              state.longRangeGranularity === "month" ? "secondary" : "ghost"
-            }
-            onClick={() => actions.setLongRangeGranularity("month")}
-          >
-            По месяцам
-          </Button>
-        </div>
-      ) : null}
 
       <div className="grid grid-cols-2 gap-2 md:grid-cols-4 md:gap-4">
         <GlassCard className="rounded-2xl p-3 md:rounded-[28px] md:p-5">

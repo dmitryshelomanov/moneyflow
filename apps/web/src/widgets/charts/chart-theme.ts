@@ -34,11 +34,3 @@ export const CHART_GRID = {
 
 export const CHART_TOOLTIP_CLASS =
   "rounded-2xl border-2 border-black/90 bg-[#fffdf5] px-3 py-2 text-sm shadow-[0_4px_0_rgba(0,0,0,0.8)]";
-
-export const CHART_Y_AXIS = {
-  axisLine: false,
-  tickLine: false,
-  tick: CHART.tick,
-  width: 80,
-  tickMargin: 6,
-} as const;

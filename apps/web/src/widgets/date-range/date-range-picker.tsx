@@ -11,16 +11,14 @@ import { ru as dateFnsRu } from "date-fns/locale";
 import { CalendarIcon } from "lucide-react";
 import { type DateRange } from "react-day-picker";
 import { ru } from "react-day-picker/locale";
-import { formatYmd, parseYmd } from "@/shared/lib/date";
+import { formatPeriodRangeLabel, formatYmd, parseYmd } from "@/shared/lib/date";
 import { cn } from "@/shared/lib/cn";
 import { Button } from "@/shared/ui/button";
 import { Calendar } from "@/shared/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/shared/ui/popover";
 
 function formatRangeLabel(from?: Date, to?: Date) {
-  if (from && to) {
-    return `${format(from, "d MMM yyyy", { locale: dateFnsRu })} — ${format(to, "d MMM yyyy", { locale: dateFnsRu })}`;
-  }
+  if (from && to) return formatPeriodRangeLabel(from, to);
   if (from) return format(from, "d MMM yyyy", { locale: dateFnsRu });
   return "Выберите период";
 }
@@ -93,7 +91,6 @@ type DateRangePickerProps = {
   onChange: (next: { from: string; to: string }) => void;
   className?: string;
   allTimeFrom?: string | null;
-  large?: boolean;
 };
 
 export function DateRangePicker({
@@ -102,7 +99,6 @@ export function DateRangePicker({
   onChange,
   className,
   allTimeFrom,
-  large = false,
 }: DateRangePickerProps) {
   const [open, setOpen] = React.useState(false);
   const [months, setMonths] = React.useState(1);
@@ -172,8 +168,7 @@ export function DateRangePicker({
         <Button
           variant="secondary"
           className={cn(
-            "w-full justify-start text-left font-normal md:w-auto",
-            large && "h-12 rounded-2xl px-4 text-sm md:text-base",
+            "w-fit max-w-full justify-start text-left font-normal",
             className,
           )}
         >

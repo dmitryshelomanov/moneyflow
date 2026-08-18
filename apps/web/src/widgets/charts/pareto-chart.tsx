@@ -10,12 +10,10 @@ import {
 } from "recharts";
 import { formatMoney, fromMinorUnits } from "@moneyflow/shared";
 import type { ParetoPoint } from "@/entities/stats/api/stats-api";
-import { formatAxisMoney } from "@/shared/lib/chart";
 import {
   CHART,
   CHART_GRID,
   CHART_TOOLTIP_CLASS,
-  CHART_Y_AXIS,
 } from "@/widgets/charts/chart-theme";
 
 type ParetoChartProps = {
@@ -94,7 +92,7 @@ function ParetoPlot({
         margin={{
           top: 8,
           right: showShareAxis ? 12 : 8,
-          left: 8,
+          left: 0,
           bottom: 20,
         }}
       >
@@ -121,11 +119,7 @@ function ParetoPlot({
           minTickGap={showShareAxis ? 28 : 12}
           tick={{ ...CHART.tick, fontSize: showShareAxis ? 11 : 10 }}
         />
-        <YAxis
-          yAxisId="money"
-          {...CHART_Y_AXIS}
-          tickFormatter={(value: number) => formatAxisMoney(value, currency)}
-        />
+        <YAxis yAxisId="money" hide />
         <YAxis
           yAxisId="share"
           orientation="right"

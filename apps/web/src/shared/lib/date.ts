@@ -45,6 +45,22 @@ export function formatDayLabel(key: string) {
   return format(date, sameYear ? "d MMMM" : "d MMMM yyyy", { locale: ru });
 }
 
+/** Calendar months touched by an inclusive [from, to] range. */
+export function inclusiveMonthSpan(from: Date, to: Date): number {
+  const months =
+    (to.getFullYear() - from.getFullYear()) * 12 +
+    (to.getMonth() - from.getMonth()) +
+    1;
+  return Math.max(1, months);
+}
+
+export function formatPeriodRangeLabel(from: Date, to: Date): string {
+  const range = `${format(from, "d MMM yyyy", { locale: ru })} — ${format(to, "d MMM yyyy", { locale: ru })}`;
+  const months = inclusiveMonthSpan(from, to);
+  if (months <= 12) return range;
+  return `${range} · ${months} мес`;
+}
+
 export function previousPeriodYmdRange(from: string, to: string) {
   const start = parseYmd(from);
   const end = parseYmd(to);

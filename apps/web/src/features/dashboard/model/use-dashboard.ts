@@ -8,17 +8,7 @@ import { transactionKeys } from "@/entities/transaction/model/queries";
 import { usePeriod } from "@/features/period/model/period-context";
 import { quickParseApi } from "@/features/quick-parse/api/quick-parse-api";
 import { pickGranularity, type Granularity } from "@/shared/lib/chart";
-import { parseYmd, toIsoRange } from "@/shared/lib/date";
-
-function inclusiveMonthSpan(from: string, to: string) {
-  const start = parseYmd(from);
-  const end = parseYmd(to);
-  const months =
-    (end.getFullYear() - start.getFullYear()) * 12 +
-    (end.getMonth() - start.getMonth()) +
-    1;
-  return Math.max(1, months);
-}
+import { inclusiveMonthSpan, parseYmd, toIsoRange } from "@/shared/lib/date";
 
 export function useDashboard() {
   const queryClient = useQueryClient();
@@ -38,7 +28,10 @@ export function useDashboard() {
     : "month";
   const balanceGranularity: Granularity = granularity;
   const { fromIso, toIso } = useMemo(() => toIsoRange(from, to), [from, to]);
-  const monthSpan = useMemo(() => inclusiveMonthSpan(from, to), [from, to]);
+  const monthSpan = useMemo(
+    () => inclusiveMonthSpan(parseYmd(from), parseYmd(to)),
+    [from, to],
+  );
   useEffect(() => {
     if (!isLongRange) {
       setLongRangeGranularity("year");

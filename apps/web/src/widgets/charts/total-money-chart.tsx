@@ -16,7 +16,6 @@ import {
   type BalancePoint,
 } from "@moneyflow/shared";
 import {
-  formatAxisMoney,
   formatChartFullLabel,
   formatChartLabel,
   parseBucketDate,
@@ -27,7 +26,6 @@ import {
   CHART,
   CHART_GRID,
   CHART_TOOLTIP_CLASS,
-  CHART_Y_AXIS,
 } from "@/widgets/charts/chart-theme";
 
 const LINE = CHART.balance;
@@ -207,7 +205,7 @@ export function TotalMoneyChart({
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
               data={data}
-              margin={{ top: 12, right: 8, left: 8, bottom: 0 }}
+              margin={{ top: 12, right: 8, left: 0, bottom: 0 }}
               style={{ cursor: "pointer" }}
               onClick={(state) => {
                 const label = state?.activeLabel;
@@ -274,13 +272,7 @@ export function TotalMoneyChart({
                   );
                 }}
               />
-              <YAxis
-                {...CHART_Y_AXIS}
-                domain={["dataMin", "dataMax"]}
-                tickFormatter={(value: number) =>
-                  formatAxisMoney(value, currency)
-                }
-              />
+              <YAxis hide domain={["dataMin", "dataMax"]} />
               <Tooltip
                 cursor={{
                   stroke: LINE,
