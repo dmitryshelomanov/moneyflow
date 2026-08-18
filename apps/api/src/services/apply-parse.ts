@@ -1,4 +1,9 @@
-import type { ParseBatch, ParseResult, Transaction } from "@moneyflow/shared";
+import {
+  TRANSACTION_NOTE_MAX_LENGTH,
+  type ParseBatch,
+  type ParseResult,
+  type Transaction,
+} from "@moneyflow/shared";
 import { sqlite } from "../db/client.js";
 import {
   getAccountById,
@@ -165,7 +170,7 @@ export function applyParseResult(
     accountId: accountResolution.accountId,
     categoryId,
     occurredAt: parsed.occurredAt,
-    note: parsed.note,
+    note: parsed.note.slice(0, TRANSACTION_NOTE_MAX_LENGTH),
     source: opts.source,
     rawText: opts.rawText ?? null,
   });

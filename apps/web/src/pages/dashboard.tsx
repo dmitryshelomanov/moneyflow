@@ -1,5 +1,7 @@
 import { formatMoney } from "@moneyflow/shared";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Check, ChevronDown } from "lucide-react";
 import { useDashboard } from "@/features/dashboard/model/use-dashboard";
 import { DateRangePicker } from "@/widgets/date-range/date-range-picker";
 import { CashflowChart } from "@/widgets/charts/cashflow-chart";
@@ -12,11 +14,58 @@ import { SavingsAdvicePanel } from "@/features/ai-savings/ui/savings-advice-pane
 import { useAiPulse } from "@/features/ai-pulse/model/use-ai-pulse";
 import { FinancePulsePanel } from "@/features/ai-pulse/ui/finance-pulse-panel";
 import { bucketToYmdRange } from "@/shared/lib/chart";
+import { cn } from "@/shared/lib/cn";
 import { Button } from "@/shared/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/shared/ui/dialog";
 import { GlassCard } from "@/shared/ui/glass-card";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
-import { Combobox } from "@/shared/ui/combobox";
+
+function AccountChoiceList({
+  accounts,
+  selectedId,
+  onSelect,
+  includeAll = false,
+}: {
+  accounts: Array<{ id: string; name: string }>;
+  selectedId: string;
+  onSelect: (id: string) => void;
+  includeAll?: boolean;
+}) {
+  const items = includeAll
+    ? [{ id: "", name: "Все счета" }, ...accounts]
+    : accounts;
+
+  return (
+    <div className="space-y-2">
+      {items.map((account) => {
+        const isActive = account.id === selectedId;
+        return (
+          <button
+            key={account.id || "all"}
+            type="button"
+            className={cn(
+              "flex w-full items-center justify-between rounded-2xl border-2 px-4 py-3 text-left text-sm transition",
+              isActive
+                ? "border-black bg-[#d8fb88]"
+                : "border-black/20 bg-white hover:border-black/50",
+            )}
+            onClick={() => onSelect(account.id)}
+          >
+            <span className="font-medium">{account.name}</span>
+            {isActive ? <Check className="h-4 w-4" /> : null}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 export function DashboardPage() {
   const { state, actions, mutations, queries } = useDashboard();
@@ -24,6 +73,11 @@ export function DashboardPage() {
   const aiPulse = useAiPulse();
   const navigate = useNavigate();
   const currency = state.summary?.currency ?? "RUB";
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [quickOpen, setQuickOpen] = useState(false);
+  const selectedAccountName =
+    state.accounts.find((account) => account.id === state.selectedAccountId)
+      ?.name ?? "Все счета";
 
   const exportCsv = () => {
     const rows = [
@@ -62,6 +116,17 @@ export function DashboardPage() {
     navigate(`/transactions?${params.toString()}`);
   };
 
+  const submitQuickParse = async () => {
+    if (mutations.parseMutation.isPending || !state.quickText.trim()) return;
+    actions.setMessage(null);
+    try {
+      await mutations.parseMutation.mutateAsync();
+      setQuickOpen(false);
+    } catch (err) {
+      actions.setMessage(err instanceof Error ? err.message : "Ошибка");
+    }
+  };
+
   return (
     <div className="flex flex-col gap-4 md:gap-6">
       <DateRangePicker
@@ -73,70 +138,74 @@ export function DashboardPage() {
           actions.setPeriod({ from: nextFrom, to: nextTo });
         }}
       />
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="w-full sm:max-w-xs">
-          <Combobox
-            value={state.selectedAccountId || "all"}
-            onValueChange={(value) =>
-              actions.setSelectedAccountId(value === "all" ? "" : value)
-            }
-            options={[
-              { value: "all", label: "Все счета" },
-              ...state.accounts.map((account) => ({
-                value: account.id,
-                label: account.name,
-              })),
-            ]}
-            placeholder="Фильтр по счету"
-          />
+      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <button
+          type="button"
+          className="flex h-11 w-full items-center justify-between rounded-2xl border-2 border-black/90 bg-[#fffdf5] px-4 text-sm text-black shadow-[0_3px_0_rgba(0,0,0,0.8)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/30 sm:w-auto sm:min-w-[12rem]"
+          onClick={() => setAccountOpen(true)}
+        >
+          <span className="truncate">{selectedAccountName}</span>
+          <ChevronDown className="h-4 w-4 shrink-0 text-black/60" />
+        </button>
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
+          <Button
+            className="w-full sm:w-auto"
+            size="sm"
+            variant="default"
+            disabled={state.accounts.length === 0}
+            onClick={() => {
+              actions.setMessage(null);
+              setQuickOpen(true);
+            }}
+          >
+            Быстрая запись
+          </Button>
+          <Button
+            className="w-full sm:w-auto"
+            size="sm"
+            variant="default"
+            disabled={!state.summary || aiPulse.isPending}
+            onClick={async () => {
+              try {
+                await aiPulse.requestPulse({
+                  from: state.from,
+                  to: state.to,
+                });
+              } catch {
+                // Error state is rendered below action buttons.
+              }
+            }}
+          >
+            {aiPulse.isPending ? "Смотрю..." : "Как дела?"}
+          </Button>
+          <Button
+            className="w-full sm:w-auto"
+            size="sm"
+            variant="secondary"
+            disabled={!state.summary || aiSavings.isPending}
+            onClick={async () => {
+              try {
+                await aiSavings.requestAdvice({
+                  from: state.from,
+                  to: state.to,
+                  maxTips: 5,
+                });
+              } catch {
+                // Error state is rendered below action buttons.
+              }
+            }}
+          >
+            {aiSavings.isPending ? "Ищу варианты..." : "Где сэкономить?"}
+          </Button>
+          <Button
+            className="w-full sm:w-auto"
+            size="sm"
+            variant="ghost"
+            onClick={exportCsv}
+          >
+            Экспорт CSV
+          </Button>
         </div>
-      </div>
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
-        <Button
-          className="w-full sm:w-auto"
-          size="sm"
-          variant="default"
-          disabled={!state.summary || aiPulse.isPending}
-          onClick={async () => {
-            try {
-              await aiPulse.requestPulse({
-                from: state.from,
-                to: state.to,
-              });
-            } catch {
-              // Error state is rendered below action buttons.
-            }
-          }}
-        >
-          {aiPulse.isPending ? "Смотрю..." : "Как дела?"}
-        </Button>
-        <Button
-          className="w-full sm:w-auto"
-          size="sm"
-          variant="secondary"
-          disabled={!state.summary || aiSavings.isPending}
-          onClick={async () => {
-            try {
-              await aiSavings.requestAdvice({
-                from: state.from,
-                to: state.to,
-                maxTips: 5,
-              });
-            } catch {
-              // Error state is rendered below action buttons.
-            }
-          }}
-        >
-          {aiSavings.isPending ? "Ищу варианты..." : "Где сэкономить?"}
-        </Button>
-        <Button
-          className="w-full sm:w-auto"
-          size="sm"
-          variant="ghost"
-          onClick={exportCsv}
-        >
-          Экспорт CSV
-        </Button>
       </div>
       {aiPulse.error && (
         <p className="text-sm text-rose-600">
@@ -201,46 +270,72 @@ export function DashboardPage() {
 
       <div className="grid grid-cols-2 gap-2 md:grid-cols-4 md:gap-4">
         <GlassCard className="rounded-2xl p-3 md:rounded-[28px] md:p-5">
-          <div className="text-[10px] uppercase tracking-[0.14em] text-black/55 md:text-xs md:tracking-[0.16em]">
-            Баланс
-          </div>
-          <div className="mt-1 font-display text-lg leading-tight text-black md:mt-2 md:text-3xl">
-            {state.summary
-              ? formatMoney(state.summary.balance, state.summary.currency)
-              : "—"}
-          </div>
-        </GlassCard>
-        <GlassCard className="rounded-2xl p-3 md:rounded-[28px] md:p-5">
-          <div className="text-[10px] uppercase tracking-[0.14em] text-black/55 md:text-xs md:tracking-[0.16em]">
-            Доход за период
-          </div>
-          <div className="mt-1 font-display text-lg leading-tight text-teal-700 md:mt-2 md:text-3xl">
-            {state.summary
-              ? formatMoney(state.summary.periodIncome, state.summary.currency)
-              : "—"}
+          <div className="flex gap-2.5 md:gap-3">
+            <div className="w-[3px] shrink-0 self-stretch rounded-full bg-[#22c55e]" />
+            <div className="min-w-0">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#16a34a] md:text-xs">
+                Баланс
+              </div>
+              <div className="mt-1 font-display text-lg leading-tight tabular-nums text-black md:mt-2 md:text-3xl">
+                {state.summary
+                  ? formatMoney(state.summary.balance, state.summary.currency)
+                  : "—"}
+              </div>
+            </div>
           </div>
         </GlassCard>
         <GlassCard className="rounded-2xl p-3 md:rounded-[28px] md:p-5">
-          <div className="text-[10px] uppercase tracking-[0.14em] text-black/55 md:text-xs md:tracking-[0.16em]">
-            Расход за период
-          </div>
-          <div className="mt-1 font-display text-lg leading-tight text-rose-600 md:mt-2 md:text-3xl">
-            {state.summary
-              ? formatMoney(state.summary.periodExpense, state.summary.currency)
-              : "—"}
+          <div className="flex gap-2.5 md:gap-3">
+            <div className="w-[3px] shrink-0 self-stretch rounded-full bg-[#4F6BED]" />
+            <div className="min-w-0">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#4F6BED] md:text-xs">
+                Доход за период
+              </div>
+              <div className="mt-1 font-display text-lg leading-tight tabular-nums text-black md:mt-2 md:text-3xl">
+                {state.summary
+                  ? formatMoney(
+                      state.summary.periodIncome,
+                      state.summary.currency,
+                    )
+                  : "—"}
+              </div>
+            </div>
           </div>
         </GlassCard>
         <GlassCard className="rounded-2xl p-3 md:rounded-[28px] md:p-5">
-          <div className="text-[10px] uppercase tracking-[0.14em] text-black/55 md:text-xs md:tracking-[0.16em]">
-            Доля расходов
+          <div className="flex gap-2.5 md:gap-3">
+            <div className="w-[3px] shrink-0 self-stretch rounded-full bg-[#E67E22]" />
+            <div className="min-w-0">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#E67E22] md:text-xs">
+                Расход за период
+              </div>
+              <div className="mt-1 font-display text-lg leading-tight tabular-nums text-black md:mt-2 md:text-3xl">
+                {state.summary
+                  ? formatMoney(
+                      state.summary.periodExpense,
+                      state.summary.currency,
+                    )
+                  : "—"}
+              </div>
+            </div>
           </div>
-          <div className="mt-1 font-display text-lg leading-tight text-black md:mt-2 md:text-3xl">
-            {state.ratio == null ? "—" : `${state.ratio}%`}
-          </div>
-          <div className="mt-1 text-[11px] text-black/55 md:text-xs">
-            {state.ratio == null
-              ? "нет дохода в периоде"
-              : "от дохода за период"}
+        </GlassCard>
+        <GlassCard className="rounded-2xl p-3 md:rounded-[28px] md:p-5">
+          <div className="flex gap-2.5 md:gap-3">
+            <div className="w-[3px] shrink-0 self-stretch rounded-full bg-[#6B7280]" />
+            <div className="min-w-0">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#6B7280] md:text-xs">
+                Доля расходов
+              </div>
+              <div className="mt-1 font-display text-lg leading-tight tabular-nums text-black md:mt-2 md:text-3xl">
+                {state.ratio == null ? "—" : `${state.ratio}%`}
+              </div>
+              <div className="mt-1 text-[11px] text-black/55 md:text-xs">
+                {state.ratio == null
+                  ? "нет дохода в периоде"
+                  : "от дохода за период"}
+              </div>
+            </div>
           </div>
         </GlassCard>
       </div>
@@ -337,46 +432,82 @@ export function DashboardPage() {
         </GlassCard>
       </div>
 
-      <GlassCard className="space-y-3">
-        <Label>Быстрая запись</Label>
-        <div className="flex flex-col gap-3 md:flex-row">
-          <Combobox
-            value={state.quickAccountId}
-            onValueChange={actions.setQuickAccountId}
-            options={state.accounts.map((account) => ({
-              value: account.id,
-              label: account.name,
-            }))}
-            placeholder="Счет"
-            className="md:max-w-[15rem]"
-          />
-          <Input
-            placeholder="кофе 350 или зарплата 100000"
-            value={state.quickText}
-            onChange={(e) => actions.setQuickText(e.target.value)}
-          />
-          <Button
-            disabled={
-              mutations.parseMutation.isPending || !state.quickText.trim()
-            }
-            onClick={async () => {
-              actions.setMessage(null);
-              try {
-                await mutations.parseMutation.mutateAsync();
-              } catch (err) {
-                actions.setMessage(
-                  err instanceof Error ? err.message : "Ошибка",
-                );
-              }
+      <Dialog open={accountOpen} onOpenChange={setAccountOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Счет</DialogTitle>
+            <DialogDescription>
+              Показать данные по одному счету или по всем
+            </DialogDescription>
+          </DialogHeader>
+          <AccountChoiceList
+            accounts={state.accounts}
+            selectedId={state.selectedAccountId}
+            includeAll
+            onSelect={(id) => {
+              actions.setSelectedAccountId(id);
+              setAccountOpen(false);
             }}
-          >
-            Разобрать
-          </Button>
-        </div>
-        {state.message && (
-          <p className="text-sm text-black/65">{state.message}</p>
-        )}
-      </GlassCard>
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={quickOpen}
+        onOpenChange={(open) => {
+          setQuickOpen(open);
+          if (!open) actions.setMessage(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Быстрая запись</DialogTitle>
+            <DialogDescription>
+              Напишите операцию своими словами — разберём и сохраним
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Счет</Label>
+              <div className="mt-1">
+                <AccountChoiceList
+                  accounts={state.accounts}
+                  selectedId={state.quickAccountId}
+                  onSelect={actions.setQuickAccountId}
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="quick-parse-text">Текст</Label>
+              <Input
+                id="quick-parse-text"
+                className="mt-1"
+                placeholder="кофе 350 или зарплата 100000"
+                value={state.quickText}
+                autoFocus
+                onChange={(e) => actions.setQuickText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter") return;
+                  e.preventDefault();
+                  void submitQuickParse();
+                }}
+              />
+            </div>
+            <Button
+              className="w-full"
+              disabled={
+                mutations.parseMutation.isPending || !state.quickText.trim()
+              }
+              onClick={() => void submitQuickParse()}
+            >
+              {mutations.parseMutation.isPending ? "Разбираю..." : "Разобрать"}
+            </Button>
+            {state.message ? (
+              <p className="text-sm text-black/65">{state.message}</p>
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

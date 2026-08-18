@@ -16,14 +16,21 @@ import {
   type BalancePoint,
 } from "@moneyflow/shared";
 import {
+  formatAxisMoney,
   formatChartFullLabel,
   formatChartLabel,
   parseBucketDate,
   type Granularity,
 } from "@/shared/lib/chart";
 import { cn } from "@/shared/lib/cn";
+import {
+  CHART,
+  CHART_GRID,
+  CHART_TOOLTIP_CLASS,
+  CHART_Y_AXIS,
+} from "@/widgets/charts/chart-theme";
 
-const LINE = "#22c55e";
+const LINE = CHART.balance;
 
 function xTickStep(length: number) {
   if (length <= 8) return 1;
@@ -62,7 +69,7 @@ function ChartTooltip({
   if (!active || !payload?.[0]) return null;
   const row = payload[0].payload;
   return (
-    <div className="rounded-2xl border-2 border-black/90 bg-[#fffdf5] px-3 py-2 text-sm shadow-[0_4px_0_rgba(0,0,0,0.8)]">
+    <div className={CHART_TOOLTIP_CLASS}>
       <div className="mb-0.5 text-xs capitalize text-black/55">
         {row.fullLabel}
       </div>
@@ -186,7 +193,7 @@ export function TotalMoneyChart({
             </div>
           ) : null}
         </div>
-        <div className="mt-1 font-display text-2xl tracking-tight text-black sm:text-3xl md:text-4xl">
+        <div className="mt-1 font-display text-2xl tracking-tight tabular-nums text-black sm:text-3xl md:text-4xl">
           {formatMoney(displayBalance, currency)}
         </div>
       </div>
@@ -200,7 +207,7 @@ export function TotalMoneyChart({
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart
               data={data}
-              margin={{ top: 12, right: 8, left: 0, bottom: 0 }}
+              margin={{ top: 12, right: 8, left: 8, bottom: 0 }}
               style={{ cursor: "pointer" }}
               onClick={(state) => {
                 const label = state?.activeLabel;
@@ -212,16 +219,12 @@ export function TotalMoneyChart({
             >
               <defs>
                 <linearGradient id="balanceFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={LINE} stopOpacity={0.28} />
-                  <stop offset="75%" stopColor={LINE} stopOpacity={0.04} />
+                  <stop offset="0%" stopColor={LINE} stopOpacity={0.35} />
+                  <stop offset="55%" stopColor={LINE} stopOpacity={0.1} />
                   <stop offset="100%" stopColor={LINE} stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid
-                vertical={false}
-                stroke="rgba(148,163,184,0.18)"
-                strokeDasharray="3 6"
-              />
+              <CartesianGrid {...CHART_GRID} />
               <XAxis
                 dataKey="label"
                 axisLine={false}
@@ -260,7 +263,7 @@ export function TotalMoneyChart({
                       y={y + 12}
                       textAnchor="middle"
                       className={cn(
-                        "text-[11px]",
+                        "font-mono text-[11px] tabular-nums",
                         active ? "fill-black font-semibold" : "fill-black/40",
                       )}
                     >
@@ -271,7 +274,13 @@ export function TotalMoneyChart({
                   );
                 }}
               />
-              <YAxis hide domain={["dataMin", "dataMax"]} />
+              <YAxis
+                {...CHART_Y_AXIS}
+                domain={["dataMin", "dataMax"]}
+                tickFormatter={(value: number) =>
+                  formatAxisMoney(value, currency)
+                }
+              />
               <Tooltip
                 cursor={{
                   stroke: LINE,
@@ -282,7 +291,7 @@ export function TotalMoneyChart({
                 content={<ChartTooltip currency={currency} />}
               />
               <Area
-                type="linear"
+                type="monotone"
                 dataKey="balance"
                 stroke={LINE}
                 strokeWidth={2.5}
@@ -302,16 +311,7 @@ export function TotalMoneyChart({
                     return <g key={`dot-empty-${index}`} />;
                   }
                   if (!isSelected && !isLast) {
-                    return (
-                      <circle
-                        key={`dot-small-${row?.key ?? index}`}
-                        cx={cx}
-                        cy={cy}
-                        r={2.5}
-                        fill={LINE}
-                        fillOpacity={0.38}
-                      />
-                    );
+                    return <g key={`dot-hidden-${row?.key ?? index}`} />;
                   }
                   return (
                     <circle

@@ -330,8 +330,8 @@ export function CategoryPieChart({
               nameKey="name"
               cx="50%"
               cy="50%"
-              innerRadius="52%"
-              outerRadius="78%"
+              innerRadius="56%"
+              outerRadius="80%"
               paddingAngle={2}
               stroke="rgba(0,0,0,0.7)"
               strokeWidth={2}
@@ -356,13 +356,16 @@ export function CategoryPieChart({
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <button
             type="button"
-            className="pointer-events-auto flex max-w-[65%] flex-col items-center rounded-full border-2 border-black/90 bg-[#fffdf5] px-3 py-2 text-center shadow-[0_3px_0_rgba(0,0,0,0.8)] sm:max-w-[58%] sm:px-3.5 sm:py-2.5 md:max-w-[46%] md:px-3 md:py-2"
+            className="pointer-events-auto flex max-w-[62%] flex-col items-center text-center sm:max-w-[54%] md:max-w-[44%]"
             onClick={() => setSelection(EMPTY_SELECTION)}
             aria-label="Сбросить выбор"
           >
             {selected ? (
               <>
-                <div className="flex items-center gap-1.5 text-xs font-medium text-black/75 md:text-[11px]">
+                <div
+                  className="flex max-w-full items-center justify-center gap-1 text-[10px] font-semibold uppercase tracking-[0.16em] md:text-[11px]"
+                  style={{ color: darkenHexColor(selected.color) }}
+                >
                   <CategoryIcon
                     name={selected.icon}
                     className="h-3 w-3 shrink-0"
@@ -371,16 +374,16 @@ export function CategoryPieChart({
                   />
                   <span className="truncate">{selected.name}</span>
                 </div>
-                <div className="mt-0.5 font-display text-sm leading-tight text-black sm:text-base md:text-base">
+                <div className="mt-1 font-display text-lg leading-tight tabular-nums text-black sm:text-xl md:text-2xl">
                   {formatMoney(selected.totalMinor, currency)}
                 </div>
               </>
             ) : (
               <>
-                <div className="text-[11px] uppercase tracking-[0.14em] text-black/55 md:text-[10px]">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-black/45 md:text-[11px]">
                   Итого
                 </div>
-                <div className="font-display text-sm leading-tight text-black sm:text-base md:text-lg">
+                <div className="mt-1 font-display text-lg leading-tight tabular-nums text-black sm:text-xl md:text-2xl">
                   {formatMoney(totalMinor, currency)}
                 </div>
               </>

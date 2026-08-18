@@ -5,6 +5,7 @@ import { formatMoney } from "@moneyflow/shared";
 import type { HeatmapCell } from "@/entities/stats/api/stats-api";
 import { parseYmd } from "@/shared/lib/date";
 import { cn } from "@/shared/lib/cn";
+import { CHART } from "@/widgets/charts/chart-theme";
 
 type SpendingHeatmapChartProps = {
   cells: HeatmapCell[];
@@ -14,13 +15,7 @@ type SpendingHeatmapChartProps = {
 };
 
 const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
-const HEAT_LEVELS = [
-  "bg-[#ebedf0]",
-  "bg-[#c6e48b]",
-  "bg-[#7bc96f]",
-  "bg-[#239a3b]",
-  "bg-[#196127]",
-];
+const HEAT_LEVELS = CHART.heat;
 
 function intensityClass(ratio: number) {
   if (ratio <= 0) return HEAT_LEVELS[0];
@@ -103,7 +98,7 @@ export function SpendingHeatmapChart({
               </span>
               <div className="h-2 rounded-full bg-black/10">
                 <div
-                  className="h-2 rounded-full bg-[#7bc96f]"
+                  className="h-2 rounded-full bg-[#e67e22]"
                   style={{
                     width:
                       maxWeekday > 0
@@ -130,7 +125,7 @@ export function SpendingHeatmapChart({
               <span className="text-xs text-black/60">{row.hour}:00</span>
               <div className="h-2 rounded-full bg-black/10">
                 <div
-                  className="h-2 rounded-full bg-[#239a3b]"
+                  className="h-2 rounded-full bg-[#c45a10]"
                   style={{
                     width:
                       maxHour > 0
@@ -173,7 +168,7 @@ export function SpendingHeatmapChart({
                   <div
                     key={`${weekdayIndex}-${hour}`}
                     className={cn(
-                      "h-5 rounded-sm border border-black/10",
+                      "h-5 rounded-md border border-black/10",
                       intensityClass(ratio),
                     )}
                     title={`${weekday} ${hour}:00 — ${formatMoney(total, currency)}`}
@@ -190,7 +185,7 @@ export function SpendingHeatmapChart({
           <div
             key={idx}
             className={cn(
-              "h-3.5 w-3.5 rounded-[3px] border border-black/10",
+              "h-3.5 w-3.5 rounded-md border border-black/10",
               className,
             )}
           />
@@ -208,7 +203,7 @@ export function SpendingHeatmapChart({
             <div
               key={idx}
               className={cn(
-                "h-3.5 w-3.5 rounded-[3px] border border-black/10",
+                "h-3.5 w-3.5 rounded-md border border-black/10",
                 className,
               )}
             />

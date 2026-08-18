@@ -118,6 +118,14 @@ export function bucketToYmdRange(
   return { from, to };
 }
 
+/** Compact money for chart axes (major units, not minor). */
+export function formatAxisMoney(value: number, _currency = "RUB"): string {
+  return new Intl.NumberFormat("ru-RU", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
 export function fillKeys(
   from: string,
   to: string,

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Bar,
+  CartesianGrid,
   Cell,
   ComposedChart,
   Line,
@@ -17,6 +18,7 @@ import {
 } from "@moneyflow/shared";
 import {
   fillKeys,
+  formatAxisMoney,
   formatChartFullLabel,
   formatChartLabel,
   keyPrefixLength,
@@ -24,15 +26,15 @@ import {
 } from "@/shared/lib/chart";
 import { cn } from "@/shared/lib/cn";
 import { Button } from "@/shared/ui/button";
+import {
+  CHART,
+  CHART_GRID,
+  CHART_TOOLTIP_CLASS,
+  CHART_Y_AXIS,
+} from "@/widgets/charts/chart-theme";
 
-const EXPENSE = {
-  muted: "#d8c8ff",
-  active: "#9b7cf6",
-};
-const INCOME = {
-  muted: "#9fe8d8",
-  active: "#2ec4a8",
-};
+const EXPENSE = CHART.expense;
+const INCOME = CHART.income;
 
 type CashflowChartProps = {
   series: TimeseriesPoint[];
@@ -97,17 +99,29 @@ function ChartTooltip({
   const row = payload[0].payload;
   const leftover = row.incomeMinor - row.expenseMinor;
   return (
-    <div className="rounded-2xl border-2 border-black/90 bg-[#fffdf5] px-3 py-2 text-sm shadow-[0_4px_0_rgba(0,0,0,0.8)]">
+    <div className={CHART_TOOLTIP_CLASS}>
       <div className="mb-1 font-medium text-black">{row.fullLabel}</div>
-      <div className="flex items-center gap-2 text-[#7c5cbf]">
-        <span className="h-2 w-2 rounded-full bg-[#9b7cf6]" />
+      <div
+        className="flex items-center gap-2"
+        style={{ color: EXPENSE.active }}
+      >
+        <span
+          className="h-2 w-2 rounded-full"
+          style={{ backgroundColor: EXPENSE.active }}
+        />
         Траты: {formatMoney(row.expenseMinor, currency)}
         {mode === "percent" ? (
           <span className="text-black/65">({row.expensePct.toFixed(1)}%)</span>
         ) : null}
       </div>
-      <div className="mt-0.5 flex items-center gap-2 text-[#0f9f88]">
-        <span className="h-2 w-2 rounded-full bg-[#2ec4a8]" />
+      <div
+        className="mt-0.5 flex items-center gap-2"
+        style={{ color: INCOME.active }}
+      >
+        <span
+          className="h-2 w-2 rounded-full"
+          style={{ backgroundColor: INCOME.active }}
+        />
         Доходы: {formatMoney(row.incomeMinor, currency)}
         {mode === "percent" ? (
           <span className="text-black/65">({row.incomePct.toFixed(1)}%)</span>
@@ -255,35 +269,69 @@ export function CashflowChart({
             <div className="text-xs text-black/45">Весь период</div>
           )}
         </div>
-        <div className="mt-1 font-display text-2xl tracking-tight text-black sm:text-3xl">
+        <div className="mt-1 font-display text-2xl tracking-tight tabular-nums text-black sm:text-3xl">
           {formatMoney(leftover, currency)}
         </div>
-        <div className="mt-3 flex flex-wrap gap-x-3 gap-y-2 sm:gap-x-6">
+        <div className="mt-3 grid grid-cols-2 gap-3">
           <button
             type="button"
-            className="flex items-center gap-2 rounded-lg text-left transition-opacity hover:opacity-80"
+            className="flex items-start gap-2 rounded-lg text-left transition-opacity hover:opacity-80"
             onClick={() => openTransactions("expense")}
           >
-            <span className="font-medium text-[#8b6ad8]">
-              {formatMoney(expenseMinor, currency)}
-            </span>
-            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#ebe4ff] text-[#8b6ad8]">
-              <ChevronRight className="h-3.5 w-3.5" />
-            </span>
-            <span className="text-sm text-black/60">Траты</span>
+            <div
+              className="mt-0.5 w-[3px] shrink-0 self-stretch rounded-full"
+              style={{ backgroundColor: EXPENSE.active }}
+            />
+            <div className="min-w-0">
+              <div
+                className="text-[10px] font-semibold uppercase tracking-[0.16em]"
+                style={{ color: EXPENSE.active }}
+              >
+                Траты
+              </div>
+              <div className="mt-0.5 flex items-center gap-1.5 font-display text-base tabular-nums text-black sm:text-lg">
+                {formatMoney(expenseMinor, currency)}
+                <span
+                  className="flex h-5 w-5 items-center justify-center rounded-full"
+                  style={{
+                    backgroundColor: `${EXPENSE.active}22`,
+                    color: EXPENSE.active,
+                  }}
+                >
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </span>
+              </div>
+            </div>
           </button>
           <button
             type="button"
-            className="flex items-center gap-2 rounded-lg text-left transition-opacity hover:opacity-80"
+            className="flex items-start gap-2 rounded-lg text-left transition-opacity hover:opacity-80"
             onClick={() => openTransactions("income")}
           >
-            <span className="font-medium text-[#1aa994]">
-              {formatMoney(incomeMinor, currency)}
-            </span>
-            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#d8f6ef] text-[#1aa994]">
-              <ChevronRight className="h-3.5 w-3.5" />
-            </span>
-            <span className="text-sm text-black/60">Доходы</span>
+            <div
+              className="mt-0.5 w-[3px] shrink-0 self-stretch rounded-full"
+              style={{ backgroundColor: INCOME.active }}
+            />
+            <div className="min-w-0">
+              <div
+                className="text-[10px] font-semibold uppercase tracking-[0.16em]"
+                style={{ color: INCOME.active }}
+              >
+                Доходы
+              </div>
+              <div className="mt-0.5 flex items-center gap-1.5 font-display text-base tabular-nums text-black sm:text-lg">
+                {formatMoney(incomeMinor, currency)}
+                <span
+                  className="flex h-5 w-5 items-center justify-center rounded-full"
+                  style={{
+                    backgroundColor: `${INCOME.active}22`,
+                    color: INCOME.active,
+                  }}
+                >
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </span>
+              </div>
+            </div>
           </button>
         </div>
         <div className="mt-3 flex gap-1.5 overflow-x-auto pb-1 pr-1 sm:flex-wrap sm:gap-2">
@@ -343,7 +391,7 @@ export function CashflowChart({
                 data={data}
                 barGap={4}
                 barCategoryGap={isSingleBucket ? "58%" : "22%"}
-                margin={{ top: 6, right: 0, left: 0, bottom: 0 }}
+                margin={{ top: 8, right: 8, left: 8, bottom: 0 }}
                 style={{ cursor: "pointer" }}
                 onClick={(state) => {
                   const row = state?.activePayload?.[0]?.payload as
@@ -351,6 +399,81 @@ export function CashflowChart({
                   selectRow(row);
                 }}
               >
+                <defs>
+                  <linearGradient
+                    id="expenseBarActive"
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="1"
+                  >
+                    <stop
+                      offset="0%"
+                      stopColor={EXPENSE.active}
+                      stopOpacity={1}
+                    />
+                    <stop
+                      offset="100%"
+                      stopColor={EXPENSE.active}
+                      stopOpacity={0.62}
+                    />
+                  </linearGradient>
+                  <linearGradient
+                    id="expenseBarMuted"
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="1"
+                  >
+                    <stop
+                      offset="0%"
+                      stopColor={EXPENSE.muted}
+                      stopOpacity={1}
+                    />
+                    <stop
+                      offset="100%"
+                      stopColor={EXPENSE.muted}
+                      stopOpacity={0.55}
+                    />
+                  </linearGradient>
+                  <linearGradient
+                    id="incomeBarActive"
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="1"
+                  >
+                    <stop
+                      offset="0%"
+                      stopColor={INCOME.active}
+                      stopOpacity={1}
+                    />
+                    <stop
+                      offset="100%"
+                      stopColor={INCOME.active}
+                      stopOpacity={0.62}
+                    />
+                  </linearGradient>
+                  <linearGradient
+                    id="incomeBarMuted"
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="1"
+                  >
+                    <stop
+                      offset="0%"
+                      stopColor={INCOME.muted}
+                      stopOpacity={1}
+                    />
+                    <stop
+                      offset="100%"
+                      stopColor={INCOME.muted}
+                      stopOpacity={0.55}
+                    />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid {...CHART_GRID} />
                 <XAxis
                   dataKey="label"
                   axisLine={false}
@@ -369,7 +492,7 @@ export function CashflowChart({
                         y={y + 12}
                         textAnchor="middle"
                         className={cn(
-                          "cursor-pointer text-[11px] sm:text-[12px]",
+                          "cursor-pointer font-mono text-[11px] tabular-nums sm:text-[12px]",
                           active ? "fill-black font-semibold" : "fill-black/40",
                         )}
                         onClick={() => selectRow(data[index])}
@@ -379,7 +502,14 @@ export function CashflowChart({
                     );
                   }}
                 />
-                <YAxis hide />
+                <YAxis
+                  {...CHART_Y_AXIS}
+                  tickFormatter={(value: number) =>
+                    mode === "percent"
+                      ? `${Math.round(value)}%`
+                      : formatAxisMoney(value, currency)
+                  }
+                />
                 <Tooltip
                   cursor={{ fill: "rgba(148,163,184,0.12)", radius: 6 }}
                   content={<ChartTooltip currency={currency} mode={mode} />}
@@ -401,7 +531,11 @@ export function CashflowChart({
                     return (
                       <Cell
                         key={`e-${row.key}`}
-                        fill={isSelected ? EXPENSE.active : EXPENSE.muted}
+                        fill={
+                          isSelected
+                            ? "url(#expenseBarActive)"
+                            : "url(#expenseBarMuted)"
+                        }
                         fillOpacity={dimmed ? 0.45 : isEmptyMonth ? 0.55 : 1}
                         cursor="pointer"
                       />
@@ -425,7 +559,11 @@ export function CashflowChart({
                     return (
                       <Cell
                         key={`i-${row.key}`}
-                        fill={isSelected ? INCOME.active : INCOME.muted}
+                        fill={
+                          isSelected
+                            ? "url(#incomeBarActive)"
+                            : "url(#incomeBarMuted)"
+                        }
                         fillOpacity={dimmed ? 0.45 : isEmptyMonth ? 0.55 : 1}
                         cursor="pointer"
                       />
@@ -436,10 +574,31 @@ export function CashflowChart({
                   type="monotone"
                   dataKey={lineDataKey}
                   name="Остаток"
-                  stroke="#334155"
-                  strokeWidth={2}
-                  dot={false}
-                  activeDot={{ r: 4, fill: "#334155" }}
+                  stroke={CHART.leftover}
+                  strokeWidth={2.5}
+                  activeDot={{
+                    r: 5,
+                    fill: "#fff",
+                    stroke: CHART.leftover,
+                    strokeWidth: 2.5,
+                  }}
+                  dot={(props) => {
+                    const { cx, cy, index } = props;
+                    if (cx == null || cy == null || index !== data.length - 1) {
+                      return <g key={`leftover-empty-${index}`} />;
+                    }
+                    return (
+                      <circle
+                        key="leftover-end"
+                        cx={cx}
+                        cy={cy}
+                        r={5}
+                        fill="#fff"
+                        stroke={CHART.leftover}
+                        strokeWidth={2.5}
+                      />
+                    );
+                  }}
                 />
               </ComposedChart>
             </ResponsiveContainer>

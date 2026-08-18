@@ -3,6 +3,8 @@ import { z } from "zod";
 export const TransactionTypeSchema = z.enum(["expense", "income"]);
 export type TransactionType = z.infer<typeof TransactionTypeSchema>;
 
+export const TRANSACTION_NOTE_MAX_LENGTH = 1000;
+
 export const CategorySchema = z.object({
   id: z.string(),
   name: z.string().min(1),
@@ -72,7 +74,7 @@ export const CreateTransactionSchema = z.object({
   accountId: z.string().nullable().optional(),
   categoryId: z.string().nullable().optional(),
   occurredAt: z.string().optional(),
-  note: z.string().max(500).nullable().optional(),
+  note: z.string().max(TRANSACTION_NOTE_MAX_LENGTH).nullable().optional(),
   source: z.enum(["telegram", "web"]).default("web"),
   rawText: z.string().nullable().optional(),
   /** If true, amount is already in minor units (kopecks). */
@@ -87,7 +89,7 @@ export const UpdateTransactionSchema = z.object({
   accountId: z.string().nullable().optional(),
   categoryId: z.string().nullable().optional(),
   occurredAt: z.string().optional(),
-  note: z.string().max(500).nullable().optional(),
+  note: z.string().max(TRANSACTION_NOTE_MAX_LENGTH).nullable().optional(),
   amountInMinor: z.boolean().optional(),
 });
 export type UpdateTransaction = z.infer<typeof UpdateTransactionSchema>;
