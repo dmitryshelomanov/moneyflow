@@ -19,7 +19,6 @@
     "lint": "eslint .",
     "typecheck": "npm run build -w @moneyflow/shared && npm run build -w @moneyflow/api && npm exec -w @moneyflow/web tsc -b",
     "test": "npm run test -w @moneyflow/api && npm run test -w @moneyflow/web",
-    "deploy": "bash scripts/deploy.sh",
     "db:dump": "bash scripts/dump-db.sh",
     "db:restore": "bash scripts/restore-db.sh",
     "hook:install": "bash scripts/install-pre-commit-hook.sh"

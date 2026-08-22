@@ -73,7 +73,7 @@ Dashboard URL is printed at the end: `https://<domain>/k/<ACCESS_KEY>/` (or `htt
 /opt/moneyflow/install.sh uninstall --purge  # also delete /opt/moneyflow
 ```
 
-Pin a release with `GITHUB_REF=v0.1.0`. Existing `npm run deploy` (rsync from your laptop, same `certs/` layout) is unchanged; see [Deploy on a VPS](#deploy-on-a-vps).
+Pin a release with `GITHUB_REF=v0.1.0`. App updates: [Update a VPS](#update-a-vps). SQLite dump/restore from the laptop still uses `env.prod`.
 
 ## Quick start
 
@@ -281,72 +281,34 @@ openssl rand -hex 16   # ACCESS_KEY
 openssl rand -hex 32   # SESSION_SECRET
 ```
 
-## Deploy on a VPS
+## Update a VPS
 
-Local script: online SQLite dump (unless skipped) → rsync over SSH → write `.env` on the server → remote preflight checks (`docker`, `docker compose`, TLS certs in `certs/`, path permissions) → `docker compose up -d --build --remove-orphans` → post-deploy verification (app + Caddy on **HTTPS :443**, HTTP fallback **:80**). Schema is created on app boot (`CREATE TABLE IF NOT EXISTS`).
-
-Public URL: `https://<DOMAIN>/k/<ACCESS_KEY>/`  
-Healthcheck: `https://<DOMAIN>/health`  
-HTTP fallback: `http://<SERVER_IP>/health`
-
-### Once on the VPS
-
-1. Ubuntu/Debian, Docker + Compose plugin, host ports **443** (HTTPS) and **80** (HTTP fallback) open.
-2. Deploy user with an SSH key (public key in `~/.ssh/authorized_keys`).
-3. Directory, e.g. `/opt/moneyflow` (created by the deploy script).
-4. TLS files at `/opt/moneyflow/certs/fullchain.pem` and `privkey.pem` (symlinks to your Let’s Encrypt live certs; not in git). Deploy requires these files.
-
-### Local deploy config
+There is no git checkout on the server. Push to `main` (or a version tag) — CI publishes `ghcr.io/dmitryshelomanov/moneyflow`. Then as **root**:
 
 ```bash
-cp env.prod.example env.prod
-# fill DEPLOY_* and app secrets (env.prod is gitignored)
-# put the private key at .deploy-keys/moneyflow_deploy (also gitignored)
-
-npm run deploy
-# or: ./scripts/deploy.sh
+/opt/moneyflow/install.sh update
 ```
 
-| Variable                               | Example                                        |
-| -------------------------------------- | ---------------------------------------------- |
-| `DEPLOY_HOST`                          | Server IP                                      |
-| `DEPLOY_USER`                          | `deploy`                                       |
-| `DEPLOY_PATH`                          | `/opt/moneyflow`                               |
-| `DEPLOY_SSH_KEY`                       | `.deploy-keys/moneyflow_deploy`                |
-| `DEPLOY_SSH_PORT`                      | `22`                                           |
-| `WEB_ORIGIN`                           | `https://your.domain`                          |
-| `ACCESS_KEY`                           | yes (≥8)                                       |
-| `SESSION_SECRET`                       | yes (≥8)                                       |
-| `TELEGRAM_BOT_TOKEN`                   | for the bot                                    |
-| `ALLOWED_TELEGRAM_IDS`                 | whitelist                                      |
-| `TELEGRAM_BOT_ID`                      | optional; otherwise derived from the bot token |
-| `VITE_TELEGRAM_BOT_ID`                 | optional; still accepted as a fallback         |
-| `ROUTERAI_API_KEY`                     | for AI                                         |
-| `ROUTERAI_BASE_URL` / `ROUTERAI_MODEL` | optional                                       |
+That pulls the image, recreates `app` + Caddy, and checks `/health`. SQLite stays on the host (`/opt/moneyflow/data/moneyflow.db`); the container only mounts it. Schema is `CREATE TABLE IF NOT EXISTS` on boot. `.env`, certs, and the dashboard URL do not change.
 
-`NODE_ENV`, `PORT`, `DATABASE_PATH` are set by the script when uploading `.env`.
+Pin a tag: `GITHUB_REF=v0.1.0 /opt/moneyflow/install.sh update`.
 
-### Post-deploy checks
-
-After deploy, the script verifies:
-
-- `docker compose ps` output on the server
-- running `app` container state/image via `docker inspect`
-- internal app health from inside the container (`http://127.0.0.1:3000/health`)
-- external health endpoint from your machine (`$WEB_ORIGIN/health`) with retries
+Public URL: `https://<DOMAIN>/k/<ACCESS_KEY>/`  
+Healthcheck: `https://<DOMAIN>/health`
 
 ### Database dump & restore
 
-Uses the same `env.prod` / `DEPLOY_*` SSH settings as deploy. Dumps are consistent online backups via `better-sqlite3` (safe while the app is running / under WAL).
-
-**Dump** (also runs automatically before each deploy unless `SKIP_PRE_DEPLOY_BACKUP=1`):
+From the laptop, using `env.prod` / `DEPLOY_*` SSH settings. Online backups via `better-sqlite3` (safe while the app is running / under WAL).
 
 ```bash
+cp env.prod.example env.prod
+# fill DEPLOY_* (and keep the SSH key at .deploy-keys/moneyflow_deploy)
+
 npm run db:dump
 # or: ./scripts/dump-db.sh
 ```
 
-- Creates a remote temp backup, downloads it to `data/dumps/moneyflow-YYYYMMDD-HHMMSS.db`
+- Downloads to `data/dumps/moneyflow-YYYYMMDD-HHMMSS.db`
 - Keeps the newest `KEEP_DUMPS` files (default `14`); set `LOCAL_DUMP_DIR` to change the folder
 
 **Restore** (replaces remote `data/moneyflow.db`):
@@ -360,7 +322,15 @@ npm run db:restore -- data/dumps/moneyflow-YYYYMMDD-HHMMSS.db
 2. Uploads the dump, backs up the current remote DB to `data/pre-restore-….db`
 3. Stops `app`, removes leftover `moneyflow.db-wal` / `.db-shm`, swaps the database file, starts `app` again and waits for health
 
-Dump/restore files under `data/` are local/remote ops artifacts — keep them out of git (the pre-commit hook rejects `*.db`).
+Dump/restore files under `data/` stay out of git (the pre-commit hook rejects `*.db`).
+
+| Variable        | Example                         |
+| --------------- | ------------------------------- |
+| `DEPLOY_HOST`   | Server IP                       |
+| `DEPLOY_USER`   | `deploy`                        |
+| `DEPLOY_PATH`   | `/opt/moneyflow`                |
+| `DEPLOY_SSH_KEY`| `.deploy-keys/moneyflow_deploy` |
+| `DEPLOY_SSH_PORT` | `22` (or your SSH port)       |
 
 ### Auth without a domain
 
@@ -372,9 +342,9 @@ Dump/restore files under `data/` are local/remote ops artifacts — keep them ou
 
 Use the **bot** for auth on bare IP (cert may not match the IP hostname).
 
-### Run compose on the server only
+### Run without the installer
 
-From a git checkout (builds the image locally; `ACCESS_KEY` is a runtime env, not a build-arg):
+Local or a machine where you build the image yourself (`ACCESS_KEY` is runtime env, not a build-arg):
 
 ```bash
 cp .env.example .env
@@ -382,7 +352,7 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-Or pull the published image with [deploy/docker-compose.yml](deploy/docker-compose.yml) (this is what `install.sh` uses).
+Production VPS uses [deploy/docker-compose.yml](deploy/docker-compose.yml) via `install.sh` (pull from GHCR, no local build).
 
 Manual start without Docker:
 

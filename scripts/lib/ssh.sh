@@ -1,4 +1,4 @@
-# Sourced by deploy.sh / dump-db.sh.
+# Sourced by dump-db.sh / restore-db.sh.
 # Requires: KEY_PATH, DEPLOY_SSH_PORT, DEPLOY_USER, DEPLOY_HOST
 
 create_ssh_wrap() {
