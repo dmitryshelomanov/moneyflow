@@ -82,6 +82,79 @@ function xTickStep(length: number) {
   return 4;
 }
 
+function pluralRu(n: number, one: string, few: string, many: string) {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+  return many;
+}
+
+function periodUnitLabel(granularity: Granularity, count: number) {
+  if (granularity === "day") return pluralRu(count, "дня", "дня", "дней");
+  if (granularity === "week")
+    return pluralRu(count, "недели", "недели", "недель");
+  if (granularity === "year") return pluralRu(count, "года", "года", "лет");
+  return pluralRu(count, "месяца", "месяца", "месяцев");
+}
+
+function LeftoverDot({
+  cx,
+  cy,
+  index,
+  payload,
+  isLast,
+}: {
+  cx?: number;
+  cy?: number;
+  index?: number;
+  payload?: ChartRow;
+  isLast: boolean;
+}) {
+  if (cx == null || cy == null || !payload?.hasOperations) {
+    return <g key={`leftover-empty-${index}`} />;
+  }
+
+  const leftover = payload.incomeMinor - payload.expenseMinor;
+  if (leftover === 0) {
+    return isLast ? (
+      <circle
+        key={`leftover-zero-${index}`}
+        cx={cx}
+        cy={cy}
+        r={5}
+        fill="#fff"
+        stroke={CHART.leftover}
+        strokeWidth={2.5}
+      />
+    ) : (
+      <g key={`leftover-empty-${index}`} />
+    );
+  }
+
+  const up = leftover > 0;
+  const size = 6;
+  const points = up
+    ? `${cx},${cy - size} ${cx - size},${cy + size * 0.45} ${cx + size},${cy + size * 0.45}`
+    : `${cx},${cy + size} ${cx - size},${cy - size * 0.45} ${cx + size},${cy - size * 0.45}`;
+
+  return (
+    <g key={`leftover-arrow-${index}`}>
+      {isLast ? (
+        <circle
+          cx={cx}
+          cy={cy}
+          r={7}
+          fill="#fff"
+          stroke={CHART.leftover}
+          strokeWidth={1.5}
+        />
+      ) : null}
+      <polygon points={points} fill={CHART.balance} />
+    </g>
+  );
+}
+
 function ChartTooltip({
   active,
   payload,
@@ -233,6 +306,14 @@ export function CashflowChart({
   const remainPct =
     incomeMinor > 0 ? Math.round((leftover / incomeMinor) * 100) : null;
   const tone = insightTone(remainPct);
+  const activeBuckets = data.filter((row) => row.hasOperations);
+  const plusBuckets = activeBuckets.filter(
+    (row) => row.incomeMinor > row.expenseMinor,
+  );
+  const plusSummary =
+    activeBuckets.length > 0
+      ? `В плюсе ${plusBuckets.length} из ${activeBuckets.length} ${periodUnitLabel(granularity, activeBuckets.length)}`
+      : null;
   const tickStep = xTickStep(data.length);
   const barsAreEmpty = data.every((d) => d.expense === 0 && d.income === 0);
   const isSingleBucket = data.length === 1;
@@ -370,6 +451,9 @@ export function CashflowChart({
             </p>
           ) : null
         ) : null}
+        {plusSummary ? (
+          <p className="mt-2 text-sm font-medium text-black/75">{plusSummary}</p>
+        ) : null}
       </div>
 
       <div className="h-52 sm:h-56 md:h-60">
@@ -389,7 +473,7 @@ export function CashflowChart({
                 data={data}
                 barGap={4}
                 barCategoryGap={isSingleBucket ? "58%" : "22%"}
-                margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+                margin={{ top: 14, right: 8, left: 0, bottom: 0 }}
                 style={{ cursor: "pointer" }}
                 onClick={(state) => {
                   const row = state?.activePayload?.[0]?.payload as
@@ -574,19 +658,14 @@ export function CashflowChart({
                     strokeWidth: 2.5,
                   }}
                   dot={(props) => {
-                    const { cx, cy, index } = props;
-                    if (cx == null || cy == null || index !== data.length - 1) {
-                      return <g key={`leftover-empty-${index}`} />;
-                    }
+                    const { cx, cy, index, payload } = props;
                     return (
-                      <circle
-                        key="leftover-end"
+                      <LeftoverDot
                         cx={cx}
                         cy={cy}
-                        r={5}
-                        fill="#fff"
-                        stroke={CHART.leftover}
-                        strokeWidth={2.5}
+                        index={index}
+                        payload={payload as ChartRow | undefined}
+                        isLast={index === data.length - 1}
                       />
                     );
                   }}
