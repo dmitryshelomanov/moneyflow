@@ -125,11 +125,7 @@ export function SettingsAccountsSection({
                 aria-label={account.isDefault ? "Default" : "Удалить"}
                 onClick={() => onDelete(account.id)}
               >
-                {account.isDefault ? (
-                  "Default"
-                ) : (
-                  <Trash2 className="h-4 w-4" />
-                )}
+                {account.isDefault ? "Default" : <Trash2 className="h-4 w-4" />}
               </Button>
             </div>
           );

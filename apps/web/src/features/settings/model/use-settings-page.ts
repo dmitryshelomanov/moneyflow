@@ -137,7 +137,11 @@ export function useSettingsPage() {
       openingBalance: String(fromMinorUnits(account.openingBalance)),
     };
 
-  const patchDraft = (accountId: string, draft: AccountDraft, patch: Partial<AccountDraft>) => {
+  const patchDraft = (
+    accountId: string,
+    draft: AccountDraft,
+    patch: Partial<AccountDraft>,
+  ) => {
     setAccountDrafts((prev) => ({
       ...prev,
       [accountId]: { ...draft, ...patch },

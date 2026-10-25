@@ -154,8 +154,7 @@ export function CashflowChart({
                 style={{ cursor: "pointer" }}
                 onClick={(state) => {
                   const row = state?.activePayload?.[0]?.payload as
-                    | CashflowChartRow
-                    | undefined;
+                    CashflowChartRow | undefined;
                   selectRow(row);
                 }}
               >

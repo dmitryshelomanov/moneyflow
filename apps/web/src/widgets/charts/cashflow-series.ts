@@ -89,8 +89,7 @@ export function buildCashflowRows(
     const incomeMinor = point?.income ?? 0;
     const leftoverMinor = incomeMinor - expenseMinor;
     const incomePct = incomeMinor > 0 ? 100 : 0;
-    const expensePct =
-      incomeMinor > 0 ? (expenseMinor / incomeMinor) * 100 : 0;
+    const expensePct = incomeMinor > 0 ? (expenseMinor / incomeMinor) * 100 : 0;
     const leftoverPct =
       incomeMinor > 0 ? (leftoverMinor / incomeMinor) * 100 : 0;
     return {

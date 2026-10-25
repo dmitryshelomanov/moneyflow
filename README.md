@@ -324,13 +324,13 @@ npm run db:restore -- data/dumps/moneyflow-YYYYMMDD-HHMMSS.db
 
 Dump/restore files under `data/` stay out of git (the pre-commit hook rejects `*.db`).
 
-| Variable        | Example                         |
-| --------------- | ------------------------------- |
-| `DEPLOY_HOST`   | Server IP                       |
-| `DEPLOY_USER`   | `deploy`                        |
-| `DEPLOY_PATH`   | `/opt/moneyflow`                |
-| `DEPLOY_SSH_KEY`| `.deploy-keys/moneyflow_deploy` |
-| `DEPLOY_SSH_PORT` | `22` (or your SSH port)       |
+| Variable          | Example                         |
+| ----------------- | ------------------------------- |
+| `DEPLOY_HOST`     | Server IP                       |
+| `DEPLOY_USER`     | `deploy`                        |
+| `DEPLOY_PATH`     | `/opt/moneyflow`                |
+| `DEPLOY_SSH_KEY`  | `.deploy-keys/moneyflow_deploy` |
+| `DEPLOY_SSH_PORT` | `22` (or your SSH port)         |
 
 ### Auth without a domain
 

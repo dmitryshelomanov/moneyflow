@@ -96,7 +96,9 @@ export function CashflowTooltip({
         value={formatMoney(row.expenseMinor, currency)}
         extra={
           mode === "percent" ? (
-            <span className="text-black/65">({row.expensePct.toFixed(1)}%)</span>
+            <span className="text-black/65">
+              ({row.expensePct.toFixed(1)}%)
+            </span>
           ) : null
         }
       />
@@ -279,7 +281,11 @@ export function CashflowSummaryHeader({
   );
 }
 
-export function CashflowInsightBanner({ remainPct }: { remainPct: number | null }) {
+export function CashflowInsightBanner({
+  remainPct,
+}: {
+  remainPct: number | null;
+}) {
   const tone = cashflowInsightTone(remainPct);
   return (
     <ChartInsightCard
