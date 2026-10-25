@@ -2,12 +2,12 @@ import type {
   SavingsAdviceRequest,
   SavingsAdviceResponse,
 } from "@moneyflow/shared";
-import { request } from "@/shared/api/http";
+import { postAdvice } from "@/features/advice/api/advice-request";
 
 export const adviceApi = {
   getSavingsAdvice: (body: SavingsAdviceRequest) =>
-    request<SavingsAdviceResponse>("/advice/savings", {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
+    postAdvice<SavingsAdviceResponse, SavingsAdviceRequest>(
+      "/advice/savings",
+      body,
+    ),
 };

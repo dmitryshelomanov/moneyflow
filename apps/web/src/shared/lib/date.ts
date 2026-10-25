@@ -60,24 +60,3 @@ export function formatPeriodRangeLabel(from: Date, to: Date): string {
   if (months <= 12) return range;
   return `${range} · ${months} мес`;
 }
-
-export function previousPeriodYmdRange(from: string, to: string) {
-  const start = parseYmd(from);
-  const end = parseYmd(to);
-  start.setHours(0, 0, 0, 0);
-  end.setHours(0, 0, 0, 0);
-
-  const oneDayMs = 24 * 60 * 60 * 1000;
-  const spanDays = Math.max(
-    1,
-    Math.floor((end.getTime() - start.getTime()) / oneDayMs) + 1,
-  );
-
-  const prevEnd = new Date(start.getTime() - oneDayMs);
-  const prevStart = new Date(prevEnd.getTime() - (spanDays - 1) * oneDayMs);
-
-  return {
-    from: formatYmd(prevStart),
-    to: formatYmd(prevEnd),
-  };
-}

@@ -11,10 +11,10 @@ import {
 import { formatMoney, fromMinorUnits } from "@moneyflow/shared";
 import type { ParetoPoint } from "@/entities/stats/api/stats-api";
 import {
-  CHART,
-  CHART_GRID,
-  CHART_TOOLTIP_CLASS,
-} from "@/widgets/charts/chart-theme";
+  ChartTooltipShell,
+  TooltipMetricRow,
+} from "@/widgets/charts/chart-utils";
+import { CHART, CHART_GRID } from "@/widgets/charts/chart-theme";
 
 type ParetoChartProps = {
   items: ParetoPoint[];
@@ -47,29 +47,19 @@ function ChartTooltip({
   if (!active || !payload?.[0]) return null;
   const row = payload[0].payload;
   return (
-    <div className={CHART_TOOLTIP_CLASS}>
-      <div className="mb-1 font-medium text-black">{row.name}</div>
-      <div
-        className="flex items-center gap-2"
-        style={{ color: CHART.expense.active }}
-      >
-        <span
-          className="h-2 w-2 rounded-full"
-          style={{ backgroundColor: CHART.expense.active }}
-        />
-        Сумма: {formatMoney(row.totalMinor, currency)}
-      </div>
-      <div
-        className="mt-0.5 flex items-center gap-2"
-        style={{ color: CHART.balance }}
-      >
-        <span
-          className="h-2 w-2 rounded-full"
-          style={{ backgroundColor: CHART.balance }}
-        />
-        Накопительно: {row.cumulative.toFixed(1)}%
-      </div>
-    </div>
+    <ChartTooltipShell title={row.name}>
+      <TooltipMetricRow
+        color={CHART.expense.active}
+        label="Сумма"
+        value={formatMoney(row.totalMinor, currency)}
+      />
+      <TooltipMetricRow
+        className="mt-0.5"
+        color={CHART.balance}
+        label="Накопительно"
+        value={`${row.cumulative.toFixed(1)}%`}
+      />
+    </ChartTooltipShell>
   );
 }
 

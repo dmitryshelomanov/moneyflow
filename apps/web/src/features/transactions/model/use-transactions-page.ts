@@ -15,22 +15,14 @@ import type {
 } from "@moneyflow/shared";
 import useInfiniteScroll from "react-infinite-scroll-hook";
 import { useSearchParams } from "react-router-dom";
-import {
-  accountKeys,
-  useAccountsQuery,
-} from "@/entities/account/model/queries";
-import {
-  categoryKeys,
-  useCategoriesQuery,
-} from "@/entities/category/model/queries";
-import { statsKeys, useStatsMetaQuery } from "@/entities/stats/model/queries";
+import { useAccountsQuery } from "@/entities/account/model/queries";
+import { useCategoriesQuery } from "@/entities/category/model/queries";
+import { useStatsMetaQuery } from "@/entities/stats/model/queries";
 import { transactionApi } from "@/entities/transaction/api/transaction-api";
-import {
-  transactionKeys,
-  useTransactionsInfiniteQuery,
-} from "@/entities/transaction/model/queries";
+import { useTransactionsInfiniteQuery } from "@/entities/transaction/model/queries";
 import { usePeriod } from "@/features/period/model/period-context";
 import { dayKey, formatDayLabel, toIsoRange } from "@/shared/lib/date";
+import { invalidateFinancialData } from "@/shared/lib/query-cache";
 import { useDebouncedValue } from "@/shared/lib/use-debounced-value";
 
 type TransactionForm = {
@@ -203,15 +195,13 @@ export function useTransactionsPage() {
 
   const invalidateAfterMutation = useCallback(
     async (includeCategories = false) => {
-      await queryClient.invalidateQueries({ queryKey: transactionKeys.root });
-      await queryClient.invalidateQueries({ queryKey: statsKeys.meta });
-      await queryClient.invalidateQueries({
-        queryKey: statsKeys.dashboardRoot,
+      await invalidateFinancialData(queryClient, {
+        transactions: true,
+        statsMeta: true,
+        dashboard: true,
+        accounts: true,
+        categories: includeCategories,
       });
-      if (includeCategories) {
-        await queryClient.invalidateQueries({ queryKey: categoryKeys.all });
-      }
-      await queryClient.invalidateQueries({ queryKey: accountKeys.all });
     },
     [queryClient],
   );

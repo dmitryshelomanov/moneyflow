@@ -38,22 +38,3 @@ body {
 .overflow-anchor-none {
   overflow-anchor: none;
 }
-
-@keyframes float {
-  0%,
-  100% {
-    transform: translateY(0px);
-  }
-  50% {
-    transform: translateY(18px);
-  }
-}
-
-.animate-float {
-  animation: float 9s ease-in-out infinite;
-}
-
-.animate-float-delayed {
-  animation: float 11s ease-in-out infinite;
-  animation-delay: 1.4s;
-}

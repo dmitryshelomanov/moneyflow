@@ -23,19 +23,13 @@ import {
 } from "@/shared/lib/chart";
 import { cn } from "@/shared/lib/cn";
 import {
-  CHART,
-  CHART_GRID,
-  CHART_TOOLTIP_CLASS,
-} from "@/widgets/charts/chart-theme";
+  ChartInsightCard,
+  ChartTooltipShell,
+  chartTickStep,
+} from "@/widgets/charts/chart-utils";
+import { CHART, CHART_GRID } from "@/widgets/charts/chart-theme";
 
 const LINE = CHART.balance;
-
-function xTickStep(length: number) {
-  if (length <= 8) return 1;
-  if (length <= 16) return 2;
-  if (length <= 24) return 3;
-  return 4;
-}
 
 type TotalMoneyChartProps = {
   series: BalancePoint[];
@@ -67,14 +61,14 @@ function ChartTooltip({
   if (!active || !payload?.[0]) return null;
   const row = payload[0].payload;
   return (
-    <div className={CHART_TOOLTIP_CLASS}>
-      <div className="mb-0.5 text-xs capitalize text-black/55">
-        {row.fullLabel}
-      </div>
+    <ChartTooltipShell
+      title={row.fullLabel}
+      titleClassName="mb-0.5 text-xs font-normal capitalize text-black/55"
+    >
       <div className="font-display text-base text-black">
         {formatMoney(row.balanceMinor, currency)}
       </div>
-    </div>
+    </ChartTooltipShell>
   );
 }
 
@@ -176,7 +170,7 @@ export function TotalMoneyChart({
 
   const displayBalance = selected ? selected.balanceMinor : balance;
   const insight = insightFor(balance, averageExpensePerMonthMinor, currency);
-  const tickStep = granularity === "month" ? 1 : xTickStep(data.length);
+  const tickStep = granularity === "month" ? 1 : chartTickStep(data.length);
 
   return (
     <div className="space-y-4">
@@ -323,18 +317,12 @@ export function TotalMoneyChart({
         )}
       </div>
 
-      <div className="rounded-2xl border-2 border-black/90 bg-[#fff6be] px-4 py-3 shadow-[0_4px_0_rgba(0,0,0,0.75)]">
-        <div className="font-medium text-black">{insight.title}</div>
-        <div className="mt-1 text-sm text-black/65">{insight.detail}</div>
-        <div
-          className={cn(
-            "mt-2 inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium",
-            insight.badgeClass,
-          )}
-        >
-          {insight.badge}
-        </div>
-      </div>
+      <ChartInsightCard
+        title={insight.title}
+        detail={insight.detail}
+        badge={insight.badge}
+        badgeClassName={insight.badgeClass}
+      />
     </div>
   );
 }

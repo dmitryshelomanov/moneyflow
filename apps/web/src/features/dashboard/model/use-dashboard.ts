@@ -4,11 +4,11 @@ import { fromMinorUnits } from "@moneyflow/shared";
 import { useAccountsQuery } from "@/entities/account/model/queries";
 import { statsApi } from "@/entities/stats/api/stats-api";
 import { statsKeys } from "@/entities/stats/model/queries";
-import { transactionKeys } from "@/entities/transaction/model/queries";
 import { usePeriod } from "@/features/period/model/period-context";
 import { quickParseApi } from "@/features/quick-parse/api/quick-parse-api";
 import { pickGranularity, type Granularity } from "@/shared/lib/chart";
 import { inclusiveMonthSpan, parseYmd, toIsoRange } from "@/shared/lib/date";
+import { invalidateFinancialData } from "@/shared/lib/query-cache";
 
 export function useDashboard() {
   const queryClient = useQueryClient();
@@ -108,10 +108,10 @@ export function useDashboard() {
         accountId: quickAccountId || undefined,
       }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: statsKeys.dashboardRoot,
+      await invalidateFinancialData(queryClient, {
+        dashboard: true,
+        transactions: true,
       });
-      await queryClient.invalidateQueries({ queryKey: transactionKeys.root });
       setQuickText("");
       setMessage("Записано");
     },

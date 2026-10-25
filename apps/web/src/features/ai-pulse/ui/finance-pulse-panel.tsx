@@ -4,6 +4,7 @@ import type {
   FinancePulseResponse,
   FinancePulseVerdict,
 } from "@moneyflow/shared";
+import { AdvicePeriodHeader } from "@/features/advice/ui/advice-period-header";
 import { GlassCard } from "@/shared/ui/glass-card";
 
 type Props = {
@@ -80,19 +81,18 @@ export function FinancePulsePanel({ pulse }: Props) {
 
   return (
     <GlassCard className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <h2 className="font-display text-xl text-black">Как дела</h2>
-          <p className="text-xs text-black/55">
-            Период: {pulse.period.from} - {pulse.period.to}
-          </p>
-        </div>
-        <span
-          className={`rounded-2xl border-2 border-black/90 px-3 py-1 text-sm font-semibold shadow-[0_3px_0_rgba(0,0,0,0.85)] ${verdictClass[pulse.verdict]}`}
-        >
-          {verdictLabel[pulse.verdict]}
-        </span>
-      </div>
+      <AdvicePeriodHeader
+        title="Как дела"
+        from={pulse.period.from}
+        to={pulse.period.to}
+        trailing={
+          <span
+            className={`rounded-2xl border-2 border-black/90 px-3 py-1 text-sm font-semibold shadow-[0_3px_0_rgba(0,0,0,0.85)] ${verdictClass[pulse.verdict]}`}
+          >
+            {verdictLabel[pulse.verdict]}
+          </span>
+        }
+      />
 
       <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-6">
         <div className="rounded-2xl border-2 border-black/15 bg-white/55 p-3">

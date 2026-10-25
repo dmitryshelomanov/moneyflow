@@ -22,17 +22,29 @@ export type HeatmapCell = {
   total: number;
 };
 
+function buildStatsParams(fields: {
+  from?: string;
+  to?: string;
+  granularity?: string;
+  accountId?: string;
+  type?: TransactionType;
+}) {
+  const params = new URLSearchParams();
+  if (fields.from) params.set("from", fields.from);
+  if (fields.to) params.set("to", fields.to);
+  if (fields.granularity) params.set("granularity", fields.granularity);
+  if (fields.accountId) params.set("accountId", fields.accountId);
+  if (fields.type) params.set("type", fields.type);
+  return params;
+}
+
 export const statsApi = {
   summary: (from?: string, to?: string, accountId?: string) => {
-    const params = new URLSearchParams();
-    if (from) params.set("from", from);
-    if (to) params.set("to", to);
-    if (accountId) params.set("accountId", accountId);
+    const params = buildStatsParams({ from, to, accountId });
     return request<StatsSummary>(`/stats/summary?${params}`);
   },
   statsMeta: (accountId?: string) => {
-    const params = new URLSearchParams();
-    if (accountId) params.set("accountId", accountId);
+    const params = buildStatsParams({ accountId });
     return request<{ firstTransactionAt: string | null }>(
       `/stats/meta?${params}`,
     );
@@ -43,8 +55,7 @@ export const statsApi = {
     granularity = "day",
     accountId?: string,
   ) => {
-    const params = new URLSearchParams({ from, to, granularity });
-    if (accountId) params.set("accountId", accountId);
+    const params = buildStatsParams({ from, to, granularity, accountId });
     return request<TimeseriesPoint[]>(`/stats/timeseries?${params}`);
   },
   balanceSeries: (
@@ -53,8 +64,7 @@ export const statsApi = {
     granularity = "month",
     accountId?: string,
   ) => {
-    const params = new URLSearchParams({ from, to, granularity });
-    if (accountId) params.set("accountId", accountId);
+    const params = buildStatsParams({ from, to, granularity, accountId });
     return request<BalancePoint[]>(`/stats/balance-series?${params}`);
   },
   categoryPareto: (
@@ -63,8 +73,7 @@ export const statsApi = {
     type: TransactionType,
     accountId?: string,
   ) => {
-    const params = new URLSearchParams({ from, to, type });
-    if (accountId) params.set("accountId", accountId);
+    const params = buildStatsParams({ from, to, type, accountId });
     return request<ParetoPoint[]>(`/stats/category-pareto?${params}`);
   },
   spendingHeatmap: (
@@ -73,8 +82,7 @@ export const statsApi = {
     type: TransactionType,
     accountId?: string,
   ) => {
-    const params = new URLSearchParams({ from, to, type });
-    if (accountId) params.set("accountId", accountId);
+    const params = buildStatsParams({ from, to, type, accountId });
     return request<HeatmapCell[]>(`/stats/spending-heatmap?${params}`);
   },
 };

@@ -1,5 +1,6 @@
 import { formatMoney } from "@moneyflow/shared";
 import type { SavingsAdviceResponse } from "@moneyflow/shared";
+import { AdvicePeriodHeader } from "@/features/advice/ui/advice-period-header";
 import { GlassCard } from "@/shared/ui/glass-card";
 
 type Props = {
@@ -56,12 +57,11 @@ function sanitizeAdviceHtml(rawHtml: string) {
 export function SavingsAdvicePanel({ advice }: Props) {
   return (
     <GlassCard className="space-y-3">
-      <div>
-        <h2 className="font-display text-xl text-black">Где сэкономить</h2>
-        <p className="text-xs text-black/55">
-          Период: {advice.period.from} - {advice.period.to}
-        </p>
-      </div>
+      <AdvicePeriodHeader
+        title="Где сэкономить"
+        from={advice.period.from}
+        to={advice.period.to}
+      />
 
       {advice.tips.length === 0 ? (
         <p className="text-sm text-black/65">

@@ -2,12 +2,12 @@ import type {
   FinancePulseRequest,
   FinancePulseResponse,
 } from "@moneyflow/shared";
-import { request } from "@/shared/api/http";
+import { postAdvice } from "@/features/advice/api/advice-request";
 
 export const pulseApi = {
   getFinancePulse: (body: FinancePulseRequest) =>
-    request<FinancePulseResponse>("/advice/pulse", {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
+    postAdvice<FinancePulseResponse, FinancePulseRequest>(
+      "/advice/pulse",
+      body,
+    ),
 };

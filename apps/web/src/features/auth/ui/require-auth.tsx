@@ -1,7 +1,6 @@
 import { Navigate, Outlet } from "react-router-dom";
 import { useAuth } from "@/features/auth/model/auth-context";
-import { Button } from "@/shared/ui/button";
-import { GlassCard } from "@/shared/ui/glass-card";
+import { QueryErrorCard } from "@/shared/ui/query-error-card";
 
 export function RequireAuth() {
   const { user, loading, sessionError, retrySession } = useAuth();
@@ -15,12 +14,11 @@ export function RequireAuth() {
   if (!user && sessionError) {
     return (
       <div className="flex min-h-screen items-center justify-center p-4">
-        <GlassCard className="w-full max-w-md space-y-3 text-center">
-          <p className="text-sm text-rose-600">{sessionError}</p>
-          <Button size="sm" onClick={() => void retrySession()}>
-            Повторить
-          </Button>
-        </GlassCard>
+        <QueryErrorCard
+          className="w-full max-w-md text-center"
+          message={sessionError}
+          onRetry={() => void retrySession()}
+        />
       </div>
     );
   }

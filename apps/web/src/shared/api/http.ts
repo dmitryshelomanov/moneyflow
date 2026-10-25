@@ -9,6 +9,15 @@ export class ApiError extends Error {
   }
 }
 
+export function getErrorMessage(
+  error: unknown,
+  fallback = "Произошла ошибка",
+): string {
+  if (error instanceof Error && error.message.trim()) return error.message;
+  if (typeof error === "string" && error.trim()) return error;
+  return fallback;
+}
+
 function extractErrorMessage(body: unknown, fallback: string): string {
   if (typeof body === "string" && body.trim().length > 0) return body;
   if (body && typeof body === "object" && "error" in body) {

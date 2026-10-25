@@ -1,5 +1,5 @@
-import { useMutation } from "@tanstack/react-query";
 import type { SavingsAdviceResponse } from "@moneyflow/shared";
+import { useAdviceMutation } from "@/features/advice/model/use-advice-mutation";
 import { adviceApi } from "@/features/ai-savings/api/advice-api";
 
 type RequestArgs = {
@@ -9,15 +9,15 @@ type RequestArgs = {
 };
 
 export function useAiSavings() {
-  const mutation = useMutation({
-    mutationFn: ({ from, to, maxTips = 5 }: RequestArgs) =>
+  const mutation = useAdviceMutation<RequestArgs, SavingsAdviceResponse>(
+    ({ from, to, maxTips = 5 }) =>
       adviceApi.getSavingsAdvice({ from, to, maxTips }),
-  });
+  );
 
   return {
-    requestAdvice: mutation.mutateAsync,
+    requestAdvice: mutation.request,
     isPending: mutation.isPending,
-    data: (mutation.data ?? null) as SavingsAdviceResponse | null,
+    data: mutation.data,
     error: mutation.error,
     reset: mutation.reset,
   };

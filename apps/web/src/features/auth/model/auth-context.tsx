@@ -2,6 +2,7 @@ import { createContext, useContext } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { sessionApi, type User } from "@/entities/session/api/session-api";
 import { sessionKeys, useSessionQuery } from "@/entities/session/model/queries";
+import { getErrorMessage } from "@/shared/api/http";
 
 type AuthCtx = {
   user: User | null;
@@ -38,12 +39,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const user: User | null = meQuery.data?.user ?? null;
   const loading = meQuery.isPending;
-  const sessionError =
-    meQuery.error instanceof Error
-      ? meQuery.error.message
-      : meQuery.isError
-        ? "Не удалось проверить сессию"
-        : null;
+  const sessionError = meQuery.isError
+    ? getErrorMessage(meQuery.error, "Не удалось проверить сессию")
+    : null;
 
   return (
     <Ctx.Provider

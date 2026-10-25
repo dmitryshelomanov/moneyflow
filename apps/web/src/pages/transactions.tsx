@@ -3,34 +3,31 @@ import { useTransactionsPage } from "@/features/transactions/model/use-transacti
 import { CreateTransactionForm } from "@/features/transactions/ui/create-transaction-form";
 import { TransactionsFilters } from "@/features/transactions/ui/transactions-filters";
 import { TransactionsList } from "@/features/transactions/ui/transactions-list";
+import { getErrorMessage } from "@/shared/api/http";
 import { parseDecimalInput } from "@/shared/lib/number";
 
 export function TransactionsPage() {
   const { state, refs, actions, queries, mutations } = useTransactionsPage();
 
-  const createError =
-    mutations.createMutation.error instanceof Error
-      ? mutations.createMutation.error.message
-      : null;
-  const deleteError =
-    mutations.deleteMutation.error instanceof Error
-      ? mutations.deleteMutation.error.message
-      : null;
-  const transactionsErrorMessage =
-    queries.transactionsQuery.error instanceof Error
-      ? queries.transactionsQuery.error.message
-      : "Ошибка загрузки операций";
+  const createError = mutations.createMutation.error
+    ? getErrorMessage(mutations.createMutation.error)
+    : null;
+  const deleteError = mutations.deleteMutation.error
+    ? getErrorMessage(mutations.deleteMutation.error)
+    : null;
+  const transactionsErrorMessage = getErrorMessage(
+    queries.transactionsQuery.error,
+    "Ошибка загрузки операций",
+  );
   const isDeleting = mutations.deleteMutation.isPending;
   const isBulkUpdating = mutations.bulkUpdateMutation.isPending;
   const isUpdatingAccount = mutations.updateAccountMutation.isPending;
-  const bulkUpdateError =
-    mutations.bulkUpdateMutation.error instanceof Error
-      ? mutations.bulkUpdateMutation.error.message
-      : null;
-  const updateAccountError =
-    mutations.updateAccountMutation.error instanceof Error
-      ? mutations.updateAccountMutation.error.message
-      : null;
+  const bulkUpdateError = mutations.bulkUpdateMutation.error
+    ? getErrorMessage(mutations.bulkUpdateMutation.error)
+    : null;
+  const updateAccountError = mutations.updateAccountMutation.error
+    ? getErrorMessage(mutations.updateAccountMutation.error)
+    : null;
   const hasNextPage = Boolean(queries.transactionsQuery.hasNextPage);
   const [amountError, setAmountError] = useState<string | null>(null);
 

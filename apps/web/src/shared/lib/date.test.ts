@@ -4,7 +4,6 @@ import {
   inclusiveMonthSpan,
   parseYmd,
   periodDefaults,
-  previousPeriodYmdRange,
   toIsoRange,
 } from "./date";
 
@@ -37,13 +36,6 @@ describe("date utilities", () => {
     expect(defaults.to).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     const from = parseYmd(defaults.from);
     expect(from.getDate()).toBe(1);
-  });
-
-  it("calculates previous period with equal span", () => {
-    expect(previousPeriodYmdRange("2026-08-10", "2026-08-12")).toEqual({
-      from: "2026-08-07",
-      to: "2026-08-09",
-    });
   });
 
   it("counts inclusive calendar months in a range", () => {

@@ -11,6 +11,9 @@ import {
   categoryKeys,
   useCategoriesQuery,
 } from "@/entities/category/model/queries";
+import { getErrorMessage } from "@/shared/api/http";
+import { cn } from "@/shared/lib/cn";
+import { isCoarsePointer } from "@/shared/lib/pointer";
 import { Button } from "@/shared/ui/button";
 import {
   Dialog,
@@ -23,9 +26,8 @@ import {
 import { GlassCard } from "@/shared/ui/glass-card";
 import { Input } from "@/shared/ui/input";
 import { Label } from "@/shared/ui/label";
+import { QueryErrorCard } from "@/shared/ui/query-error-card";
 import { Textarea } from "@/shared/ui/textarea";
-import { cn } from "@/shared/lib/cn";
-import { isCoarsePointer } from "@/shared/lib/pointer";
 
 export function CategoriesPage() {
   const queryClient = useQueryClient();
@@ -85,9 +87,7 @@ export function CategoriesPage() {
         });
       } catch (error) {
         setMutationError(
-          error instanceof Error
-            ? error.message
-            : "Не удалось сохранить категорию",
+          getErrorMessage(error, "Не удалось сохранить категорию"),
         );
         return;
       }
@@ -152,9 +152,7 @@ export function CategoriesPage() {
               setForm({ name: "", icon: "Circle", prompt: "" });
             } catch (error) {
               setMutationError(
-                error instanceof Error
-                  ? error.message
-                  : "Не удалось создать категорию",
+                getErrorMessage(error, "Не удалось создать категорию"),
               );
             }
           }}
@@ -172,16 +170,13 @@ export function CategoriesPage() {
         </GlassCard>
       )}
       {categoriesQuery.isError && (
-        <GlassCard className="space-y-3">
-          <p className="text-sm text-rose-600">
-            {categoriesQuery.error instanceof Error
-              ? categoriesQuery.error.message
-              : "Не удалось загрузить категории"}
-          </p>
-          <Button size="sm" onClick={() => void categoriesQuery.refetch()}>
-            Повторить
-          </Button>
-        </GlassCard>
+        <QueryErrorCard
+          message={getErrorMessage(
+            categoriesQuery.error,
+            "Не удалось загрузить категории",
+          )}
+          onRetry={() => void categoriesQuery.refetch()}
+        />
       )}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {items.map((cat) => {
@@ -277,9 +272,7 @@ export function CategoriesPage() {
                       closeCategory();
                     } catch (error) {
                       setMutationError(
-                        error instanceof Error
-                          ? error.message
-                          : "Не удалось удалить категорию",
+                        getErrorMessage(error, "Не удалось удалить категорию"),
                       );
                     }
                   }}
