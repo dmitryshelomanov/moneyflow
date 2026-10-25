@@ -64,6 +64,16 @@ CREATE TABLE IF NOT EXISTS advice_cache (
   expires_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_advice_cache_expires_at ON advice_cache(expires_at);
+
+CREATE TABLE IF NOT EXISTS bot_chat_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  chat_id TEXT NOT NULL,
+  message_id INTEGER NOT NULL,
+  kind TEXT NOT NULL CHECK(kind IN ('greeting', 'other')),
+  created_at TEXT NOT NULL,
+  UNIQUE(chat_id, message_id)
+);
+CREATE INDEX IF NOT EXISTS idx_bot_chat_messages_chat_id ON bot_chat_messages(chat_id);
 `;
 
 function ensureSettingsColumns() {

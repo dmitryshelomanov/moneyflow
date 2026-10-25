@@ -169,3 +169,30 @@ export function findCategoryName(
   if (!categoryId) return null;
   return cats.find((c) => c.id === categoryId)?.name ?? null;
 }
+
+export function formatStartGreeting(opts: {
+  balance: number;
+  currency: string;
+  webUrl: string;
+}): string {
+  return [
+    "<b>MoneyFlow</b> — личный учёт денег",
+    "",
+    `Баланс: <b>${esc(formatMoney(opts.balance, opts.currency))}</b>`,
+    `Валюта: ${esc(opts.currency)}`,
+    "",
+    "<b>Как писать</b>",
+    "• расход — <code>кофе 350</code>, <code>продукты вчера 2400</code>",
+    "• доход — <code>зарплата 120000</code>",
+    "• фото чека — одна запись с итогом",
+    "• скрин списка трат из банка — каждая операция отдельно",
+    "",
+    "<b>Команды</b>",
+    "/balance — текущий баланс",
+    "/today — доходы и расходы за сегодня",
+    "",
+    "После записи можно нажать «Отменить».",
+    "",
+    `Веб: ${esc(opts.webUrl)}`,
+  ].join("\n");
+}

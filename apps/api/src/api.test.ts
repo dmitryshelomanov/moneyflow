@@ -15,6 +15,12 @@ import { env } from "./env.js";
 import { createApp } from "./server/createApp.js";
 import { applyParseBatch } from "./services/apply-parse.js";
 import * as aiService from "./services/ai.js";
+import * as botChatHistory from "./services/bot-chat-history.js";
+import {
+  clearChatHistory,
+  listBotChatMessages,
+  recordBotChatMessage,
+} from "./services/bot-chat-history.js";
 import {
   createAccount,
   deleteAccount,
@@ -74,6 +80,7 @@ describe("API regression coverage", () => {
 
   beforeEach(() => {
     sqlite.exec("DELETE FROM transactions;");
+    sqlite.exec("DELETE FROM bot_chat_messages;");
     resetRateLimitStore();
     vi.restoreAllMocks();
   });
@@ -729,5 +736,101 @@ CREATE TABLE settings (
     expect(getBalance(now, defaultAccount.id)).toBe(100_00 - 2000);
     expect(getBalance(now, card.id)).toBe(50_00 + 1000);
     expect(getBalance(now)).toBe(100_00 + 50_00 - 2000 + 1000);
+  });
+
+  it("clearChatHistory keeps greeting and deletes other tracked messages", async () => {
+    const chatId = "1";
+    recordBotChatMessage({ chatId, messageId: 10, kind: "greeting" });
+    recordBotChatMessage({ chatId, messageId: 11, kind: "other" });
+    recordBotChatMessage({ chatId, messageId: 12, kind: "other" });
+
+    const deletedBatches: number[][] = [];
+    const result = await clearChatHistory(chatId, {
+      deleteMessages: async (_chatId, messageIds) => {
+        deletedBatches.push(messageIds);
+      },
+      sendGreeting: async () => {
+        throw new Error("should not send greeting when one exists");
+      },
+    });
+
+    expect(result).toEqual({ deleted: 2, keptGreeting: true });
+    expect(deletedBatches).toEqual([[11, 12]]);
+    const remaining = listBotChatMessages(chatId);
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]).toMatchObject({
+      messageId: 10,
+      kind: "greeting",
+    });
+  });
+
+  it("clearChatHistory sends greeting when none was stored", async () => {
+    const chatId = "1";
+    recordBotChatMessage({ chatId, messageId: 21, kind: "other" });
+    recordBotChatMessage({ chatId, messageId: 22, kind: "other" });
+
+    const deletedBatches: number[][] = [];
+    let sentText: string | null = null;
+    const result = await clearChatHistory(chatId, {
+      deleteMessages: async (_chatId, messageIds) => {
+        deletedBatches.push(messageIds);
+      },
+      sendGreeting: async (_chatId, text) => {
+        sentText = text;
+        return 99;
+      },
+    });
+
+    expect(result).toEqual({ deleted: 2, keptGreeting: true });
+    expect(deletedBatches).toEqual([[21, 22]]);
+    expect(sentText).toContain("MoneyFlow");
+    const remaining = listBotChatMessages(chatId);
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]).toMatchObject({
+      messageId: 99,
+      kind: "greeting",
+    });
+  });
+
+  it("settings clear-bot-history returns 503 without bot token", async () => {
+    vi.spyOn(botChatHistory, "createTelegramChatApi").mockReturnValue(null);
+    const cookie = await devLogin();
+    const response = await apiRequest(
+      "/settings/clear-bot-history",
+      { method: "POST", body: "{}" },
+      cookie,
+    );
+    expect(response.status).toBe(503);
+    const body = (await response.json()) as { error: string };
+    expect(body.error).toMatch(/TELEGRAM_BOT_TOKEN/);
+  });
+
+  it("settings clear-bot-history clears tracked messages for session user", async () => {
+    const cookie = await devLogin();
+    const chatId = "1";
+    recordBotChatMessage({ chatId, messageId: 1, kind: "greeting" });
+    recordBotChatMessage({ chatId, messageId: 2, kind: "other" });
+
+    const deletedBatches: number[][] = [];
+    vi.spyOn(botChatHistory, "createTelegramChatApi").mockReturnValue({
+      deleteMessages: async (_chatId, messageIds) => {
+        deletedBatches.push(messageIds);
+      },
+      sendGreeting: async () => 100,
+    });
+
+    const response = await apiRequest(
+      "/settings/clear-bot-history",
+      { method: "POST", body: "{}" },
+      cookie,
+    );
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      deleted: number;
+      keptGreeting: boolean;
+    };
+    expect(body).toEqual({ deleted: 1, keptGreeting: true });
+    expect(deletedBatches).toEqual([[2]]);
+    expect(listBotChatMessages(chatId)).toHaveLength(1);
   });
 });

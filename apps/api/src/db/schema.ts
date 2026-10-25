@@ -1,4 +1,10 @@
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import {
+  index,
+  integer,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
 
 export const settings = sqliteTable("settings", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -58,8 +64,27 @@ export const adviceCache = sqliteTable("advice_cache", {
   expiresAt: text("expires_at").notNull(),
 });
 
+export const botChatMessages = sqliteTable(
+  "bot_chat_messages",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    chatId: text("chat_id").notNull(),
+    messageId: integer("message_id").notNull(),
+    kind: text("kind", { enum: ["greeting", "other"] }).notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => ({
+    chatMessageUnique: uniqueIndex("idx_bot_chat_messages_chat_message").on(
+      table.chatId,
+      table.messageId,
+    ),
+    chatIdIdx: index("idx_bot_chat_messages_chat_id").on(table.chatId),
+  }),
+);
+
 export type SettingsRow = typeof settings.$inferSelect;
 export type CategoryRow = typeof categories.$inferSelect;
 export type AccountRow = typeof accounts.$inferSelect;
 export type TransactionRow = typeof transactions.$inferSelect;
 export type AdviceCacheRow = typeof adviceCache.$inferSelect;
+export type BotChatMessageRow = typeof botChatMessages.$inferSelect;

@@ -33,6 +33,9 @@ export function SettingsPage() {
   const updateSettingsMutation = useMutation({
     mutationFn: settingsApi.updateSettings,
   });
+  const clearBotHistoryMutation = useMutation({
+    mutationFn: settingsApi.clearBotHistory,
+  });
   const importCsvMutation = useMutation({
     mutationFn: async (payload: { file: File; promptExtension?: string }) => {
       const { file, promptExtension } = payload;
@@ -107,6 +110,10 @@ export function SettingsPage() {
     Record<string, { name: string; matchHint: string; openingBalance: string }>
   >({});
   const [accountError, setAccountError] = useState<string | null>(null);
+  const [clearHistoryError, setClearHistoryError] = useState<string | null>(
+    null,
+  );
+  const [clearHistoryDone, setClearHistoryDone] = useState<string | null>(null);
 
   useEffect(() => {
     const s = settingsQuery.data;
@@ -184,6 +191,54 @@ export function SettingsPage() {
             Список Telegram user id через запятую. Доступ к боту и веб-логину
             только у этих пользователей (плюс ID из env на сервере).
           </p>
+        </div>
+
+        <div className="space-y-2 rounded-2xl border border-black/10 bg-white/40 p-3">
+          <Label>История чата бота</Label>
+          <p className="text-xs text-black/55">
+            Удаляет в Telegram все отслеженные сообщения вашего чата с ботом,
+            кроме первого приветствия. Сообщения до появления этой функции бот
+            удалить не сможет.
+          </p>
+          <Button
+            variant="danger"
+            disabled={clearBotHistoryMutation.isPending}
+            onClick={async () => {
+              if (
+                !window.confirm(
+                  "Очистить историю чата с ботом? Останется только приветствие. Старые неотслеженные сообщения не удалятся.",
+                )
+              ) {
+                return;
+              }
+              setClearHistoryError(null);
+              setClearHistoryDone(null);
+              try {
+                const result = await clearBotHistoryMutation.mutateAsync();
+                setClearHistoryDone(
+                  result.keptGreeting
+                    ? `Удалено сообщений: ${result.deleted}. Приветствие сохранено.`
+                    : `Удалено сообщений: ${result.deleted}. Приветствие отправить не удалось.`,
+                );
+              } catch (error) {
+                setClearHistoryError(
+                  error instanceof Error
+                    ? error.message
+                    : "Не удалось очистить историю бота",
+                );
+              }
+            }}
+          >
+            {clearBotHistoryMutation.isPending
+              ? "Очищаем..."
+              : "Очистить историю бота"}
+          </Button>
+          {clearHistoryError ? (
+            <p className="text-sm text-rose-600">{clearHistoryError}</p>
+          ) : null}
+          {clearHistoryDone ? (
+            <p className="text-sm text-teal-700">{clearHistoryDone}</p>
+          ) : null}
         </div>
 
         <div>

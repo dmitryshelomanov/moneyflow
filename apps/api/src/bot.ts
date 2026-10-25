@@ -1,16 +1,22 @@
 import { formatMoney, type ParseBatch } from "@moneyflow/shared";
 import { randomBytes } from "node:crypto";
-import { Bot, InlineKeyboard } from "grammy";
+import { Bot, InlineKeyboard, type Context } from "grammy";
 import {
   findCategoryName,
   formatBatchReply,
   formatErrorReply,
+  formatStartGreeting,
 } from "./bot-messages.js";
 import { env } from "./env.js";
 import { isTelegramAllowed } from "./telegram-acl.js";
 import { log } from "./log.js";
 import { parseSmart } from "./services/ai.js";
 import { applyParseBatch } from "./services/apply-parse.js";
+import {
+  hasGreeting,
+  recordBotChatMessage,
+  type BotChatMessageKind,
+} from "./services/bot-chat-history.js";
 import {
   deleteTransaction,
   getBalance,
@@ -85,14 +91,52 @@ function logSavedTransactions(
   });
 }
 
+function chatIdOf(ctx: Context): string | null {
+  if (ctx.chat?.id == null) return null;
+  return String(ctx.chat.id);
+}
+
+function trackOutbound(
+  ctx: Context,
+  messageId: number,
+  kind: BotChatMessageKind = "other",
+) {
+  const chatId = chatIdOf(ctx);
+  if (!chatId) return;
+  recordBotChatMessage({ chatId, messageId, kind });
+}
+
+async function trackedReply(
+  ctx: Context,
+  text: string,
+  other?: Parameters<Context["reply"]>[1],
+  kind: BotChatMessageKind = "other",
+) {
+  const msg = await ctx.reply(text, other);
+  trackOutbound(ctx, msg.message_id, kind);
+  return msg;
+}
+
+function buildStartGreetingText(): string {
+  const s = getSettings();
+  const balance = getBalance();
+  const webUrl = `${env.WEB_ORIGIN.replace(/\/$/, "")}/k/${env.ACCESS_KEY}/`;
+  return formatStartGreeting({
+    balance,
+    currency: s.currency,
+    webUrl,
+  });
+}
+
 async function replyWithSavedBatch(
-  ctx: { reply: (...args: any[]) => Promise<unknown> },
+  ctx: Context,
   batch: ParseBatch,
   result: SavedBatch,
 ) {
   const cats = listCategories();
   const kb = buildUndoKeyboard(result.transactions);
-  await ctx.reply(
+  await trackedReply(
+    ctx,
     formatBatchReply({
       batch,
       transactions: result.transactions,
@@ -124,41 +168,34 @@ export function createBot() {
     await next();
   });
 
+  bot.use(async (ctx, next) => {
+    if (ctx.message && ctx.chat) {
+      recordBotChatMessage({
+        chatId: String(ctx.chat.id),
+        messageId: ctx.message.message_id,
+        kind: "other",
+      });
+    }
+    await next();
+  });
+
   bot.command("start", async (ctx) => {
     log.debug("bot", "/start", { userId: ctx.from?.id });
-    const s = getSettings();
-    const balance = getBalance();
-    const webUrl = `${env.WEB_ORIGIN.replace(/\/$/, "")}/k/${env.ACCESS_KEY}/`;
-    await ctx.reply(
-      [
-        "<b>MoneyFlow</b> — личный учёт денег",
-        "",
-        `Баланс: <b>${formatMoney(balance, s.currency)}</b>`,
-        `Валюта: ${s.currency}`,
-        "",
-        "<b>Как писать</b>",
-        "• расход — <code>кофе 350</code>, <code>продукты вчера 2400</code>",
-        "• доход — <code>зарплата 120000</code>",
-        "• фото чека — одна запись с итогом",
-        "• скрин списка трат из банка — каждая операция отдельно",
-        "",
-        "<b>Команды</b>",
-        "/balance — текущий баланс",
-        "/today — доходы и расходы за сегодня",
-        "",
-        "После записи можно нажать «Отменить».",
-        "",
-        `Веб: ${webUrl}`,
-      ].join("\n"),
-      html,
-    );
+    const chatId = chatIdOf(ctx);
+    const kind: BotChatMessageKind =
+      chatId && hasGreeting(chatId) ? "other" : "greeting";
+    await trackedReply(ctx, buildStartGreetingText(), html, kind);
   });
 
   bot.command("balance", async (ctx) => {
     const s = getSettings();
     const balance = getBalance();
     log.debug("bot", "/balance", { userId: ctx.from?.id, balance });
-    await ctx.reply(`Баланс: <b>${formatMoney(balance, s.currency)}</b>`, html);
+    await trackedReply(
+      ctx,
+      `Баланс: <b>${formatMoney(balance, s.currency)}</b>`,
+      html,
+    );
   });
 
   bot.command("today", async (ctx) => {
@@ -172,7 +209,8 @@ export function createBot() {
       income: summary.periodIncome,
       expense: summary.periodExpense,
     });
-    await ctx.reply(
+    await trackedReply(
+      ctx,
       [
         "<b>Сегодня</b>",
         `Доход: <b>${formatMoney(summary.periodIncome, s.currency)}</b>`,
@@ -253,7 +291,7 @@ export function createBot() {
         "text parse failed",
         err instanceof Error ? err.message : err,
       );
-      await ctx.reply(formatErrorReply(err), html);
+      await trackedReply(ctx, formatErrorReply(err), html);
     }
   });
 
@@ -297,7 +335,7 @@ export function createBot() {
         "photo parse failed",
         err instanceof Error ? err.message : err,
       );
-      await ctx.reply(formatErrorReply(err), html);
+      await trackedReply(ctx, formatErrorReply(err), html);
     } finally {
       buffer = null;
       log.debug("bot", "photo buffer cleared");
