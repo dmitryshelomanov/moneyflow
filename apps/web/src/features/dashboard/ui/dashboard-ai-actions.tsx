@@ -10,8 +10,8 @@ export function DashboardAiActions({
   hasSummary: boolean;
   pulsePending: boolean;
   savingsPending: boolean;
-  onPulse: () => Promise<void>;
-  onSavings: () => Promise<void>;
+  onPulse: () => Promise<unknown>;
+  onSavings: () => Promise<unknown>;
 }) {
   return (
     <>
