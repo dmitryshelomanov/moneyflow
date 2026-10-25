@@ -150,7 +150,7 @@ function LeftoverDot({
           strokeWidth={1.5}
         />
       ) : null}
-      <polygon points={points} fill={CHART.balance} />
+      <polygon points={points} fill={up ? CHART.balance : "#ef4444"} />
     </g>
   );
 }

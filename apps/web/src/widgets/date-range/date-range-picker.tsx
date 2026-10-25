@@ -106,9 +106,20 @@ export function DateRangePicker({
     from: from ? parseYmd(from) : undefined,
     to: to ? parseYmd(to) : undefined,
   };
+  const [draft, setDraft] = React.useState<DateRange | undefined>(selected);
   const [month, setMonth] = React.useState<Date>(
     selected.from ?? startOfToday(),
   );
+
+  const handleOpenChange = (next: boolean) => {
+    if (next) {
+      setDraft(
+        selected.from ? { from: selected.from, to: selected.to } : undefined,
+      );
+      setMonth(selected.from ?? startOfToday());
+    }
+    setOpen(next);
+  };
 
   React.useEffect(() => {
     const mq = window.matchMedia("(min-width: 768px)");
@@ -150,9 +161,30 @@ export function DateRangePicker({
     }
 
     onChange({ from: formatYmd(normalizedFrom), to: formatYmd(normalizedTo) });
+    setDraft({ from: normalizedFrom, to: normalizedTo });
     setMonth(normalizedFrom);
     if (close) setOpen(false);
   };
+
+  const pickDraftDate = (triggerDate: Date) => {
+    setDraft((current) => {
+      const pickingEnd = Boolean(current?.from) && !current?.to;
+      if (!pickingEnd || !current?.from) {
+        return { from: triggerDate, to: undefined };
+      }
+      if (isBefore(triggerDate, current.from)) {
+        return { from: triggerDate, to: current.from };
+      }
+      return { from: current.from, to: triggerDate };
+    });
+  };
+
+  const draftHint = !draft?.from
+    ? "Выберите первую дату"
+    : !draft.to
+      ? "Выберите вторую дату"
+      : formatRangeLabel(draft.from, draft.to);
+  const canApply = Boolean(draft?.from && draft?.to);
 
   const activePresetId = presets.find((preset) => {
     if (!selected.from || !selected.to) return false;
@@ -163,7 +195,7 @@ export function DateRangePicker({
   })?.id;
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button
           variant="secondary"
@@ -180,22 +212,36 @@ export function DateRangePicker({
       </PopoverTrigger>
       <PopoverContent className="w-auto max-w-[calc(100vw-1.5rem)] overflow-hidden p-0">
         <div className="flex flex-col sm:flex-row">
-          <Calendar
-            mode="range"
-            locale={ru}
-            numberOfMonths={months}
-            month={month}
-            onMonthChange={setMonth}
-            selected={selected}
-            onSelect={(range) => {
-              if (!range?.from) return;
-              if (!range.to) {
-                applyRange({ from: range.from, to: range.from }, false);
-                return;
-              }
-              applyRange({ from: range.from, to: range.to });
-            }}
-          />
+          <div className="flex min-w-0 flex-col">
+            <Calendar
+              mode="range"
+              locale={ru}
+              numberOfMonths={months}
+              month={month}
+              onMonthChange={setMonth}
+              selected={draft}
+              disabled={{ after: startOfToday() }}
+              onSelect={(_range, triggerDate) => {
+                pickDraftDate(triggerDate);
+              }}
+            />
+            <div className="flex items-center justify-between gap-3 border-t border-black/10 px-3 py-3">
+              <p className="min-w-0 truncate text-xs text-black/60">
+                {draftHint}
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                disabled={!canApply}
+                onClick={() => {
+                  if (!draft?.from || !draft.to) return;
+                  applyRange({ from: draft.from, to: draft.to });
+                }}
+              >
+                ОК
+              </Button>
+            </div>
+          </div>
           <div className="grid grid-cols-3 gap-1.5 border-t border-black/10 p-3 sm:flex sm:w-40 sm:shrink-0 sm:flex-col sm:gap-1.5 sm:border-t-0 sm:border-l">
             {presets.map((preset) => {
               const active = activePresetId === preset.id;
