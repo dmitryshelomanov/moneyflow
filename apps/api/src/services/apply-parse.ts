@@ -1,4 +1,5 @@
 import {
+  MAX_PARSE_TRANSACTIONS,
   TRANSACTION_NOTE_MAX_LENGTH,
   type ParseBatch,
   type ParseResult,
@@ -198,7 +199,7 @@ export function applyParseBatch(
     const parses: ParseResult[] = [];
     const accountResolutions: AccountResolution[] = [];
 
-    for (const item of batch.transactions) {
+    for (const item of batch.transactions.slice(0, MAX_PARSE_TRANSACTIONS)) {
       const result = applyParseResult(item, opts);
       saved.push(result.transaction);
       parses.push(result.parse);

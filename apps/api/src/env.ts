@@ -28,9 +28,7 @@ const EnvSchema = z.object({
   DATABASE_PATH: z.string().default("./data/moneyflow.db"),
   PORT: z.coerce.number().default(3000),
   WEB_ORIGIN: z.string().default("http://localhost:5173"),
-  NODE_ENV: z
-    .enum(["development", "production", "test"])
-    .default("development"),
+  NODE_ENV: z.enum(["development", "production", "test"]),
 });
 
 const parsed = EnvSchema.safeParse(process.env);

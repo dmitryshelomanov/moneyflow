@@ -13,12 +13,15 @@ import {
 } from "../../telegram-acl.js";
 import { badRequest, readJsonBody, validateBody } from "../helpers/http.js";
 
-const sessionCookieOptions = {
-  httpOnly: true,
-  sameSite: "Lax" as const,
-  path: "/",
-  maxAge: 60 * 60 * 24 * 30,
-};
+function sessionCookieOptions(maxAge?: number) {
+  return {
+    httpOnly: true,
+    sameSite: "Lax" as const,
+    path: "/",
+    secure: env.NODE_ENV === "production",
+    ...(maxAge === undefined ? {} : { maxAge }),
+  };
+}
 
 function setSession(
   c: Parameters<typeof setCookie>[0],
@@ -26,10 +29,7 @@ function setSession(
   name: string,
 ) {
   const token = createSessionToken(id, name);
-  setCookie(c, "mf_session", token, {
-    ...sessionCookieOptions,
-    secure: env.NODE_ENV === "production",
-  });
+  setCookie(c, "mf_session", token, sessionCookieOptions(60 * 60 * 24 * 30));
 }
 
 function buildTelegramCheck(
@@ -87,7 +87,7 @@ export function registerPublicAuthRoutes(router: Hono) {
   });
 
   router.post("/auth/dev-login", async (c) => {
-    if (env.NODE_ENV === "production") {
+    if (env.NODE_ENV !== "development") {
       return c.json({ error: "Not available" }, 404);
     }
 
@@ -109,7 +109,7 @@ export function registerPublicAuthRoutes(router: Hono) {
   });
 
   router.post("/auth/logout", (c) => {
-    deleteCookie(c, "mf_session", { path: "/" });
+    deleteCookie(c, "mf_session", sessionCookieOptions());
     return c.json({ ok: true });
   });
 

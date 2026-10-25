@@ -3,7 +3,7 @@ import { env } from "../../env.js";
 import { log } from "../../log.js";
 
 export const requestLoggerMiddleware: MiddlewareHandler = async (c, next) => {
-  if (env.NODE_ENV !== "development") {
+  if (env.NODE_ENV !== "development" || process.env.VITEST) {
     await next();
     return;
   }

@@ -3,7 +3,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     env: {
-      NODE_ENV: "test",
+      NODE_ENV: "development",
       ACCESS_KEY: "example-access-key-1234567890",
       SESSION_SECRET: "example-session-secret-1234567890",
       ALLOWED_TELEGRAM_IDS: "1",

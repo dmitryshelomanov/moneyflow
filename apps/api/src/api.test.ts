@@ -558,6 +558,11 @@ CREATE TABLE settings (
     const body = (await response.json()) as { ok: boolean; db: string };
     expect(body.ok).toBe(true);
     expect(body.db).toBe("ok");
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(response.headers.get("content-security-policy")).toContain(
+      "frame-ancestors 'none'",
+    );
   });
 
   it("parse returns 400 for not-a-transaction input", async () => {
@@ -591,13 +596,12 @@ CREATE TABLE settings (
     expect(response.status).toBe(400);
   });
 
-  it("auth route enforces rate limit", async () => {
-    const headers = { "x-forwarded-for": "198.51.100.77" };
+  it("auth route enforces rate limit without trusting X-Forwarded-For", async () => {
     let limited: Response | null = null;
     for (let i = 0; i < 12; i += 1) {
       const response = await apiRequest("/auth/dev-login", {
         method: "POST",
-        headers,
+        headers: { "x-forwarded-for": `198.51.100.${i}` },
         body: JSON.stringify({ id: 1, name: "Rate Limit" }),
       });
       if (response.status === 429) {
@@ -832,5 +836,96 @@ CREATE TABLE settings (
     expect(body).toEqual({ deleted: 1, keptGreeting: true });
     expect(deletedBatches).toEqual([[2]]);
     expect(listBotChatMessages(chatId)).toHaveLength(1);
+  });
+
+  it("logout clears the session cookie with the same flags used to set it", async () => {
+    const cookie = await devLogin();
+    const response = await apiRequest(
+      "/auth/logout",
+      { method: "POST", body: "{}" },
+      cookie,
+    );
+    expect(response.status).toBe(200);
+    const setCookie = response.headers.get("set-cookie") ?? "";
+    expect(setCookie).toContain("mf_session=");
+    expect(setCookie).toContain("Max-Age=0");
+    expect(setCookie).toContain("Path=/");
+    expect(setCookie).toContain("HttpOnly");
+    expect(setCookie).toContain("SameSite=Lax");
+  });
+
+  it("invalid access key is a 404 that does not echo the guess", async () => {
+    const guess = "not-the-real-access-key";
+    const response = await app.request(`/k/${guess}/api/auth/me`);
+    expect(response.status).toBe(404);
+    const text = await response.text();
+    expect(text).not.toContain(guess);
+  });
+
+  it("repeated invalid access keys are rate limited", async () => {
+    let limited: Response | null = null;
+    for (let i = 0; i < 25; i += 1) {
+      const response = await app.request(
+        `/k/wrong-access-key-${i}/api/auth/me`,
+        { headers: { "x-forwarded-for": `203.0.113.${i}` } },
+      );
+      if (response.status === 429) {
+        limited = response;
+        break;
+      }
+    }
+    expect(limited?.status).toBe(429);
+  });
+
+  it("rejects an image mime outside the allowlist", async () => {
+    const cookie = await devLogin();
+    const response = await apiRequest(
+      "/parse",
+      {
+        method: "POST",
+        body: JSON.stringify({ text: "кофе 350", imageMime: "text/html" }),
+      },
+      cookie,
+    );
+    expect(response.status).toBe(400);
+  });
+
+  it("allows a larger content-length on parse than on transactions", async () => {
+    const cookie = await devLogin();
+    const largeLength = String(2 * 1024 * 1024);
+    const transactions = await apiRequest(
+      "/transactions",
+      {
+        method: "POST",
+        headers: { "content-length": largeLength },
+        body: JSON.stringify({
+          type: "expense",
+          amount: 10,
+        }),
+      },
+      cookie,
+    );
+    expect(transactions.status).toBe(413);
+
+    const parse = await apiRequest(
+      "/parse",
+      {
+        method: "POST",
+        headers: { "content-length": largeLength },
+        body: JSON.stringify({ text: "кофе 350", save: false }),
+      },
+      cookie,
+    );
+    expect(parse.status).not.toBe(413);
+  });
+
+  it("escapes advice facts before putting them in HTML", () => {
+    const html = aiService.buildAdviceDetailsFromFacts([
+      `note="<script>alert(1)</script>" & 'quote'`,
+    ]);
+    expect(html).toContain("&lt;script&gt;");
+    expect(html).not.toContain("<script>");
+    expect(html).toContain("&amp;");
+    expect(html).toContain("&#39;");
   });
 });

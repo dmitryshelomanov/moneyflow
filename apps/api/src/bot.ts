@@ -10,6 +10,8 @@ import {
 import { env } from "./env.js";
 import { isTelegramAllowed } from "./telegram-acl.js";
 import { log } from "./log.js";
+import { consumeRateLimit } from "./server/middleware/rate-limit.js";
+import { isSafeTelegramFilePath } from "./telegram-file.js";
 import { parseSmart } from "./services/ai.js";
 import { applyParseBatch } from "./services/apply-parse.js";
 import {
@@ -25,6 +27,9 @@ import {
 } from "./services/money.js";
 
 const html = { parse_mode: "HTML" as const };
+const BOT_AI_WINDOW_MS = 60 * 60 * 1000;
+const BOT_AI_MAX_REQUESTS = 40;
+const MAX_TELEGRAM_PHOTO_BYTES = 8 * 1024 * 1024;
 
 type SavedBatch = ReturnType<typeof applyParseBatch>;
 
@@ -91,6 +96,70 @@ function logSavedTransactions(
   });
 }
 
+function allowBotAi(userId: number): boolean {
+  return consumeRateLimit(
+    `bot-ai:tg:${userId}`,
+    BOT_AI_WINDOW_MS,
+    BOT_AI_MAX_REQUESTS,
+  ).allowed;
+}
+
+async function downloadTelegramPhoto(filePath: string): Promise<Buffer> {
+  if (!isSafeTelegramFilePath(filePath)) {
+    throw new Error("Unsafe telegram file path");
+  }
+
+  const url = `https://api.telegram.org/file/bot${env.TELEGRAM_BOT_TOKEN}/${filePath}`;
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      signal: AbortSignal.timeout(15_000),
+      redirect: "error",
+    });
+  } catch {
+    throw new Error("Failed to download photo");
+  }
+  if (!response.ok || !response.body) {
+    throw new Error("Failed to download photo");
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > MAX_TELEGRAM_PHOTO_BYTES) {
+        throw new Error("Photo is too large");
+      }
+      chunks.push(value);
+    }
+  } catch (err) {
+    await reader.cancel().catch(() => undefined);
+    if (err instanceof Error && err.message === "Photo is too large") throw err;
+    throw new Error("Failed to download photo");
+  }
+
+  return Buffer.concat(chunks);
+}
+
+function photoFailureReply(err: unknown): string | null {
+  const message = err instanceof Error ? err.message : "";
+  if (message === "Photo is too large") {
+    return "Фото слишком большое. Пришли снимок поменьше или напиши текстом.";
+  }
+  if (
+    message === "Failed to download photo" ||
+    message === "Unsafe telegram file path"
+  ) {
+    return "Не удалось скачать фото. Пришли его ещё раз или напиши текстом.";
+  }
+  return null;
+}
+
 function chatIdOf(ctx: Context): string | null {
   if (ctx.chat?.id == null) return null;
   return String(ctx.chat.id);
@@ -155,6 +224,11 @@ export function createBot() {
   }
 
   const bot = new Bot(env.TELEGRAM_BOT_TOKEN);
+
+  bot.use(async (ctx, next) => {
+    if (ctx.chat?.type !== "private") return;
+    await next();
+  });
 
   bot.use(async (ctx, next) => {
     const id = ctx.from?.id;
@@ -272,6 +346,13 @@ export function createBot() {
     const text = ctx.message.text;
     if (text.startsWith("/")) return;
 
+    const userId = ctx.from?.id;
+
+    if (!userId || !allowBotAi(userId)) {
+      await trackedReply(ctx, "Слишком много запросов. Попробуй позже.", html);
+      return;
+    }
+
     log.info("bot", "text message", {
       userId: ctx.from?.id,
       textPreview: text.slice(0, 120),
@@ -296,8 +377,15 @@ export function createBot() {
   });
 
   bot.on("message:photo", async (ctx) => {
+    const userId = ctx.from?.id;
+
+    if (!userId || !allowBotAi(userId)) {
+      await trackedReply(ctx, "Слишком много запросов. Попробуй позже.", html);
+      return;
+    }
+
     log.info("bot", "photo message", {
-      userId: ctx.from?.id,
+      userId,
       caption: ctx.message.caption?.slice(0, 80),
     });
     await ctx.replyWithChatAction("typing");
@@ -307,12 +395,8 @@ export function createBot() {
 
     try {
       const file = await ctx.api.getFile(best.file_id);
-      if (!file.file_path) throw new Error("No file path");
-      const url = `https://api.telegram.org/file/bot${env.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
-      const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
-      if (!res.ok) throw new Error("Failed to download photo");
-      const ab = await res.arrayBuffer();
-      buffer = Buffer.from(ab);
+      if (!file.file_path) throw new Error("Failed to download photo");
+      buffer = await downloadTelegramPhoto(file.file_path);
       log.debug("bot", "photo downloaded", { bytes: buffer.length });
       const base64 = buffer.toString("base64");
       const caption = ctx.message.caption ?? undefined;
@@ -330,12 +414,17 @@ export function createBot() {
       logSavedTransactions("photo saved", result, ctx.from?.id);
       await replyWithSavedBatch(ctx, batch, result);
     } catch (err) {
+      const safeReply = photoFailureReply(err);
       log.error(
         "bot",
         "photo parse failed",
-        err instanceof Error ? err.message : err,
+        safeReply
+          ? "photo download failed"
+          : err instanceof Error
+            ? err.message
+            : err,
       );
-      await trackedReply(ctx, formatErrorReply(err), html);
+      await trackedReply(ctx, safeReply ?? formatErrorReply(err), html);
     } finally {
       buffer = null;
       log.debug("bot", "photo buffer cleared");

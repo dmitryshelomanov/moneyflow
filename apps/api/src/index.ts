@@ -25,7 +25,7 @@ const app = createApp();
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, (info) => {
   log.info("boot", `API listening on http://localhost:${info.port}`);
-  log.info("boot", `App path: /k/${env.ACCESS_KEY}/`);
+  log.info("boot", "app path mounted", { prefix: "/k/<access-key>/" });
   log.debug("boot", "env", {
     nodeEnv: env.NODE_ENV,
     webOrigin: env.WEB_ORIGIN,

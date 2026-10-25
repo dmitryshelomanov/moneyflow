@@ -4,6 +4,12 @@ export const TransactionTypeSchema = z.enum(["expense", "income"]);
 export type TransactionType = z.infer<typeof TransactionTypeSchema>;
 
 export const TRANSACTION_NOTE_MAX_LENGTH = 1000;
+export const MAX_PARSE_TRANSACTIONS = 50;
+export const ParseImageMimeSchema = z.enum([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
 
 export const CategorySchema = z.object({
   id: z.string(),
@@ -139,7 +145,7 @@ export type ParseKind = z.infer<typeof ParseKindSchema>;
 /** One or more operations from text / photo / bank screenshot. */
 export const ParseBatchSchema = z.object({
   kind: ParseKindSchema,
-  transactions: z.array(ParseResultSchema).min(1),
+  transactions: z.array(ParseResultSchema).min(1).max(MAX_PARSE_TRANSACTIONS),
 });
 export type ParseBatch = z.infer<typeof ParseBatchSchema>;
 
@@ -161,7 +167,7 @@ export const ParseRequestSchema = z
   .object({
     text: z.string().max(10_000).optional(),
     imageBase64: z.string().max(5_000_000).optional(),
-    imageMime: z.string().max(120).optional(),
+    imageMime: ParseImageMimeSchema.optional(),
     accountId: z.string().nullable().optional(),
     save: z.boolean().optional().default(true),
   })

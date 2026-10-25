@@ -4,6 +4,7 @@ import {
 } from "@moneyflow/shared";
 import { Hono } from "hono";
 import { env } from "../../env.js";
+import { log } from "../../log.js";
 import {
   buildFinancePulse,
   buildSavingsAdvice,
@@ -40,10 +41,19 @@ export function registerAdviceRoutes(
       });
       return c.json(advice);
     } catch (error) {
+      log.error(
+        "advice",
+        "savings advice failed",
+        error instanceof Error ? error.message : error,
+      );
       return c.json(
         {
           error:
-            error instanceof Error ? error.message : "Advice generation failed",
+            env.NODE_ENV === "production"
+              ? "Advice generation failed"
+              : error instanceof Error
+                ? error.message
+                : "Advice generation failed",
         },
         502,
       );
@@ -75,10 +85,19 @@ export function registerAdviceRoutes(
       });
       return c.json(pulse);
     } catch (error) {
+      log.error(
+        "advice",
+        "finance pulse failed",
+        error instanceof Error ? error.message : error,
+      );
       return c.json(
         {
           error:
-            error instanceof Error ? error.message : "Pulse generation failed",
+            env.NODE_ENV === "production"
+              ? "Pulse generation failed"
+              : error instanceof Error
+                ? error.message
+                : "Pulse generation failed",
         },
         502,
       );

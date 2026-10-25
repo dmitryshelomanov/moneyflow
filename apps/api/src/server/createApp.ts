@@ -10,6 +10,10 @@ import { api } from "../routes/api.js";
 import { accessKeyGuardMiddleware } from "./middleware/access-key.js";
 import { corsMiddleware } from "./middleware/cors.js";
 import { requestLoggerMiddleware } from "./middleware/request-logger.js";
+import {
+  applySecurityHeaders,
+  securityHeadersMiddleware,
+} from "./middleware/security-headers.js";
 import { registerProductionStaticRoutes } from "./static.js";
 
 function mapErrorToStatus(error: unknown): ContentfulStatusCode {
@@ -41,8 +45,10 @@ function mapErrorToStatus(error: unknown): ContentfulStatusCode {
 function mapErrorMessage(error: unknown, status: number): unknown {
   if (isAppError(error)) return error.message;
   if (error instanceof ZodError) return error.flatten();
-  if (status >= 500 && env.NODE_ENV === "production") {
-    return "Internal server error";
+  if (error instanceof NotATransactionError) return error.message;
+  if (env.NODE_ENV === "production") {
+    if (status >= 500) return "Internal server error";
+    return "Request could not be completed";
   }
   if (error instanceof Error) return error.message;
   return "Unexpected error";
@@ -50,6 +56,7 @@ function mapErrorMessage(error: unknown, status: number): unknown {
 
 export function createApp(): Hono {
   const app = new Hono();
+  app.use("*", securityHeadersMiddleware);
   app.use("*", corsMiddleware);
   app.use("*", requestLoggerMiddleware);
   app.onError((error, c) => {
@@ -62,6 +69,7 @@ export function createApp(): Hono {
       error: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
     });
+    applySecurityHeaders(c);
     return c.json({ error: message }, status);
   });
 
@@ -80,7 +88,10 @@ export function createApp(): Hono {
   registerProductionStaticRoutes(guarded);
 
   app.route("/k/:accessKey", guarded);
-  app.notFound((c) => c.json({ error: "Not found" }, 404));
+  app.notFound((c) => {
+    applySecurityHeaders(c);
+    return c.json({ error: "Not found" }, 404);
+  });
 
   return app;
 }

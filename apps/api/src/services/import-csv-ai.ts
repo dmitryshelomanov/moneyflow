@@ -1,8 +1,11 @@
-import type {
-  ImportCsvAiResponse,
-  ParseBatch,
-  ParseResult,
+import {
+  MAX_PARSE_TRANSACTIONS,
+  type ImportCsvAiResponse,
+  type ParseBatch,
+  type ParseResult,
 } from "@moneyflow/shared";
+import { env } from "../env.js";
+import { log } from "../log.js";
 import { applyParseBatch } from "./apply-parse.js";
 import { parseCsvRowsWithAi } from "./ai.js";
 
@@ -149,9 +152,9 @@ export async function importCsvWithAi(input: {
         chunkIndex: index + 1,
         promptExtension: input.promptExtension,
       });
-      const normalizedTransactions = parsed.transactions.filter(
-        (tx) => tx.amount > 0 && isValidOccurredAt(tx.occurredAt),
-      );
+      const normalizedTransactions = parsed.transactions
+        .filter((tx) => tx.amount > 0 && isValidOccurredAt(tx.occurredAt))
+        .slice(0, Math.min(chunk.length, MAX_PARSE_TRANSACTIONS));
 
       stats.parsed += normalizedTransactions.length;
       stats.skipped += Math.max(
@@ -180,10 +183,16 @@ export async function importCsvWithAi(input: {
       stats.saved += saved.transactions.length;
     } catch (error) {
       stats.skipped += chunk.length;
-      appendError(
-        stats.errors,
-        `Chunk ${index + 1} failed: ${errorMessage(error)}`,
+      log.error(
+        "import",
+        `csv chunk ${index + 1} failed`,
+        error instanceof Error ? error.message : error,
       );
+      const detail =
+        env.NODE_ENV === "production"
+          ? `Chunk ${index + 1} failed`
+          : `Chunk ${index + 1} failed: ${errorMessage(error)}`;
+      appendError(stats.errors, detail);
     }
   }
 

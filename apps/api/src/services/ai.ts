@@ -1,5 +1,6 @@
 import {
   FinancePulseVerdictSchema,
+  MAX_PARSE_TRANSACTIONS,
   ParseBatchSchema,
   ParseRejectSchema,
   ParseResultSchema,
@@ -256,7 +257,15 @@ function interpretParseJson(json: unknown): ParseBatch {
 
   // New batch shape: { ok?, kind, transactions: [...] }
   if (Array.isArray(record.transactions)) {
-    const items = record.transactions.map(normalizeItem);
+    const received = record.transactions.length;
+    const limited = record.transactions.slice(0, MAX_PARSE_TRANSACTIONS);
+    if (received > limited.length) {
+      log.warn("ai", "parse batch truncated", {
+        received,
+        kept: limited.length,
+      });
+    }
+    const items = limited.map(normalizeItem);
     if (items.length === 0) {
       throw new NotATransactionError(NO_TRANSACTION_MESSAGE);
     }
@@ -289,7 +298,10 @@ function buildUserContent(
   }
 
   if (opts.imageBase64) {
-    const mime = opts.imageMime ?? "image/jpeg";
+    const mime =
+      opts.imageMime === "image/png" || opts.imageMime === "image/webp"
+        ? opts.imageMime
+        : "image/jpeg";
     userContent.push({
       type: "image_url",
       image_url: {
@@ -450,8 +462,17 @@ function parseRubTokenToMinor(token: string): number | null {
   return Math.round(value * 100);
 }
 
-function buildAdviceDetailsFromFacts(facts: string[]) {
-  const items = facts.map((fact) => `<li>${fact}</li>`).join("");
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+export function buildAdviceDetailsFromFacts(facts: string[]) {
+  const items = facts.map((fact) => `<li>${escapeHtml(fact)}</li>`).join("");
   return `<p>Подтверждено данными за период:</p><ul>${items}</ul>`;
 }
 

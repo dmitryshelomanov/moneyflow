@@ -20,12 +20,23 @@ export const api = new Hono<{ Variables: ApiVariables }>();
 const publicApi = new Hono();
 const privateApi = new Hono<{ Variables: ApiVariables }>();
 
+const DEFAULT_BODY_LIMIT = 1024 * 1024;
+const LARGE_BODY_LIMIT = 6 * 1024 * 1024;
+
+function isLargeBodyPath(path: string): boolean {
+  return path.endsWith("/parse") || path.endsWith("/import/csv-ai");
+}
+
 privateApi.use("*", async (c, next) => {
   const method = c.req.method.toUpperCase();
-  if (method === "POST" || method === "PUT" || method === "PATCH") {
-    return contentLengthLimitMiddleware(1024 * 1024)(c, next);
+  if (method !== "POST" && method !== "PUT" && method !== "PATCH") {
+    await next();
+    return;
   }
-  await next();
+  const limit = isLargeBodyPath(c.req.path)
+    ? LARGE_BODY_LIMIT
+    : DEFAULT_BODY_LIMIT;
+  return contentLengthLimitMiddleware(limit)(c, next);
 });
 
 publicApi.use("/auth/*", authRateLimitMiddleware);
@@ -36,9 +47,7 @@ registerCategoryRoutes(privateApi);
 registerTransactionRoutes(privateApi);
 registerStatsRoutes(privateApi);
 privateApi.use("/parse", aiRateLimitMiddleware);
-privateApi.use("/parse", contentLengthLimitMiddleware(6 * 1024 * 1024));
 privateApi.use("/import/csv-ai", aiRateLimitMiddleware);
-privateApi.use("/import/csv-ai", contentLengthLimitMiddleware(6 * 1024 * 1024));
 privateApi.use("/advice/*", aiRateLimitMiddleware);
 registerParseRoutes(privateApi);
 registerImportCsvAiRoutes(privateApi);
